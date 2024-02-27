@@ -5,9 +5,9 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <time.h>
+#include <netinet/tcp.h>
 
-#define SERVER_IP "127.0.0.1"
-#define SERVER_PORT 5060
+
 #define BUFFER_SIZE 1024
 
 char *util_generate_random_data(unsigned int size) {
@@ -22,7 +22,53 @@ char *util_generate_random_data(unsigned int size) {
     return buffer;
 }
 
-int main(void) {
+int main(int argc, char** argv) {
+
+    if (argc != 7) {
+        fprintf(stderr, "Usage: %s <port> <algorithm>\n", argv[0]);
+        return 1;
+    }
+
+    char* SERVER_IP = argv[2];
+
+
+    int SERVER_PORT = atoi(argv[4]);
+    if (SERVER_PORT <= 0 || SERVER_PORT > 65535) {
+        fprintf(stderr, "Invalid port number: %s\n", argv[4]);
+        return 1;
+    }
+
+    char *algorithm = argv[6];
+    if (strcmp(algorithm, "reno") != 0 && strcmp(algorithm, "cubic") != 0) {
+        fprintf(stderr, "Invalid algorithm: %s\n", algorithm);
+        return 1;
+    }
+    socklen_t len = strlen(algorithm);
+
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    if (setsockopt(sock, IPPROTO_TCP, TCP_CONGESTION, algorithm, len) != 0) {
+        perror("setsockopt");
+        close(sock);
+        exit(EXIT_FAILURE);
+    }
+
+    struct sockaddr_in server_address;
+    memset(&server_address, 0, sizeof(server_address));
+    server_address.sin_family = AF_INET;
+    server_address.sin_addr.s_addr = inet_addr(SERVER_IP);
+    server_address.sin_port = htons(SERVER_PORT);
+    
+    if (connect(sock, (struct sockaddr *)&server_address, sizeof(server_address)) < 0) {
+        perror("Connection failed");
+        close(sock);
+        exit(EXIT_FAILURE);
+    }
+
     while (1) {
         // Generate random data
         unsigned int file_size = 2 * 1024 * 1024; // 2MB
@@ -36,24 +82,6 @@ int main(void) {
         }
         fwrite(data, sizeof(char), file_size, file);
         fclose(file);
-
-        // Create a TCP socket
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (sock < 0) {
-            perror("Socket creation failed");
-            exit(EXIT_FAILURE);
-        }
-
-        // Connect to the receiver
-        struct sockaddr_in server_address;
-        memset(&server_address, 0, sizeof(server_address));
-        server_address.sin_family = AF_INET;
-        server_address.sin_addr.s_addr = inet_addr(SERVER_IP);
-        server_address.sin_port = htons(SERVER_PORT);
-        if (connect(sock, (struct sockaddr *)&server_address, sizeof(server_address)) < 0) {
-            perror("Connection failed");
-            exit(EXIT_FAILURE);
-        }
 
         // Send the file
         file = fopen("file.txt", "rb");
@@ -73,24 +101,25 @@ int main(void) {
 
         // Cleanup
         free(data);
-        close(sock);
 
         // Prompt user for decision
         char choice;
         printf("Do you want to send the file again? (y/n): ");
         scanf(" %c", &choice);
         if (choice != 'y') {
-            // If user chooses not to send again, send exit message
-            char *exit_message = "EXIT"; // Define your exit message
-            if (send(sock, exit_message, strlen(exit_message), 0) < 0) {
-                perror("Send failed");
-                exit(EXIT_FAILURE);
-            }
+            // // If user chooses not to send again, send exit message
+            // char *exit_message = "EXIT"; // Define your exit message
+            // if (send(sock, exit_message, strlen(exit_message), 0) < 0) {
+            //     perror("Send failed");
+            //     exit(EXIT_FAILURE);
+            // }
+            // close(sock); // Close socket after use
             break; // Exit the loop
         }
     }
+    close(sock);
 
-    printf("Server end.");
+    printf("Client ended.\n");
     
     return 0;
 }

@@ -5,12 +5,54 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <netinet/tcp.h>
 
-#define RECEIVER_PORT 5566
+
 #define MAX_CLIENTS 1
 #define BUFFER_SIZE 1024
 
-int main() {
+struct stat{
+    int run;
+    double total_time;
+    double total_bandwidth_fn;
+};
+    
+void addStatistics(int run, double total_time, double total_bandwidth_fn, struct stat** s);
+void printStatistics(struct stat *s, double average, double total_bandwidth, int arrayLen);
+
+
+int main(int argc, char**argv) {
+    
+    struct stat *Statistics = NULL;
+    Statistics = (struct stat *)malloc(5 * sizeof(struct stat));
+    if (Statistics == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        return 1;
+    }
+    int arrayLen = 5;
+
+
+    if (argc != 5) {
+        fprintf(stderr, "Usage: %s <port> <algorithm>\n", argv[0]);
+        return 1;
+    }
+
+    int RECEIVER_PORT = atoi(argv[2]);
+    if (RECEIVER_PORT <= 0 || RECEIVER_PORT > 65535) {
+        fprintf(stderr, "Invalid port number: %s\n", argv[2]);
+        return 1;
+    }
+
+    char *algorithm = argv[4];
+    if (strcmp(algorithm, "reno") != 0 && strcmp(algorithm, "cubic") != 0) {
+        fprintf(stderr, "Invalid algorithm: %s\n", algorithm);
+        return 1;
+    }
+    socklen_t len = strlen(algorithm) + 1;
+
+    
+
+
     struct timeval start_time, end_time;
     double total_time = 0;
     unsigned int total_bytes_received = 0;
@@ -18,7 +60,6 @@ int main() {
     struct sockaddr_in sender;
     struct sockaddr_in receiver;
     socklen_t sender_len = sizeof(sender);
-    int opt = 1;
     memset(&sender, 0, sizeof(sender));
     memset(&receiver, 0, sizeof(receiver));
 
@@ -30,7 +71,7 @@ int main() {
         return 1;
     }
 
-    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+    if (setsockopt(sock, IPPROTO_TCP, TCP_CONGESTION, algorithm, len) != 0) {
         perror("setsockopt(2)");
         close(sock);
         return 1;
@@ -80,38 +121,81 @@ int main() {
             total_bytes_received += bytes_received;
         }
 
-        // Check for exit message
-        char exit_message[BUFFER_SIZE] = {0};
-        recv(client_sock, exit_message, BUFFER_SIZE, 0);
-        if (strcmp(exit_message, "EXIT") == 0) {
-            printf("Received exit message from sender.\n");
-            break;
+        printf("File transfer completed for Run #%d.\n", run);
+        printf("Waiting for Sender response...\n");
+
+        if (bytes_received == 0) {
+            printf("Sender closed the connection.\n");
+            break; // Exit the loop if sender closed the connection
+        } else if (bytes_received < 0) {
+            perror("recv");
+            exit(EXIT_FAILURE);
         }
+
 
         gettimeofday(&end_time, NULL);
         fclose(file);
         close(client_sock);
 
-        printf("File transfer completed for Run #%d.\n", run);
 
         double elapsed_time = (end_time.tv_sec - start_time.tv_sec) * 1000.0;
         elapsed_time += (end_time.tv_usec - start_time.tv_usec) / 1000.0;
         total_time += elapsed_time;
+        double total_bandwidth_fn = (total_bytes_received / (1024 * 1024)) / (total_time / 1000); // Convert bytes/ms to MB/s
+
+        // Memory reallocation logic
+        if (run > arrayLen) {
+            struct stat *temp = realloc(Statistics, (arrayLen * 2) * sizeof(struct stat));
+            if (temp == NULL) {
+                fprintf(stderr, "Memory reallocation failed\n");
+                free(Statistics); // Free previously allocated memory
+                return 1;
+            } else {
+                Statistics = temp; // Update pointer if reallocation was successful
+            }
+            arrayLen = arrayLen * 2;
+        }
+
+        addStatistics(run, total_time, total_bandwidth_fn, &Statistics);
         
         run++;
+
+        // // Check for exit message
+        // char exit_message[BUFFER_SIZE] = {0};
+        // recv(client_sock, exit_message, BUFFER_SIZE, 0);
+        // if (strcmp(exit_message, "EXIT") == 0) {
+        //     printf("Received exit message from sender.\n");
+        //     break;
+        // }
     }
 
     double average_time = total_time / (run - 1); // Exclude the run when exit message was received
     double total_bandwidth = (total_bytes_received / (1024 * 1024)) / (total_time / 1000); // Convert bytes/ms to MB/s
 
-    printf("----------------------------------\n");
-    printf("- * Statistics * -\n");
-    printf("- Run #1 Data: Time=%.2fms; Speed=%.2fMB/s\n", total_time, total_bandwidth);
-    printf("-\n");
-    printf("- Average time: %.2fms\n", average_time);
-    printf("- Total average bandwidth: %.2fMB/s\n", total_bandwidth);
-    printf("----------------------------------\n");
-    printf("Receiver end\n");
+    // Printing statistics
+    printStatistics(Statistics, average_time, total_bandwidth, arrayLen);
+
+    // Freeing memory
+    free(Statistics);
+
 
     return 0;
+}
+void addStatistics(int run, double total_time, double total_bandwidth_fn, struct stat** s){
+    s[run-1]->run = run;
+    s[run-1]->total_time = total_time;
+    s[run-1]->total_bandwidth_fn = total_bandwidth_fn;
+}
+
+void printStatistics(struct stat *s, double average, double total_bandwidth, int arrayLen){
+    printf("----------------------------------\n");
+    printf("- * Statistics * -\n");
+    for(int i = 0; i < arrayLen; i++){
+        if(&s[i] != NULL){
+            printf("- Run #%d Data: Time=%.2fms; Speed=%.2fMB/s\n", s[i].run, s[i].total_time, s[i].total_bandwidth_fn);
+        } 
+    }
+    printf("- Average time: %.2fms\n", average);
+    printf("- Total average bandwidth: %.2fMB/s\n", total_bandwidth);
+    printf("----------------------------------\n");
 }
