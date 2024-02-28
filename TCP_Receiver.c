@@ -111,8 +111,8 @@ int main(int argc, char **argv) {
                 double elapsed_time = (end_time.tv_sec - start_time.tv_sec) * 1000.0;
                 elapsed_time += (end_time.tv_usec - start_time.tv_usec) / 1000.0;
                 double total_bandwidth_fn = (total_bytes_received / (1024 * 1024)) / (elapsed_time / 1000); // Convert bytes/ms to MB/s
-                printf("File transfer completed for Run #%d.\n", run);
-                printf("- Run #%d Data: Time=%.2fms; Speed=%.2fMB/s\n", run, elapsed_time, total_bandwidth_fn);
+                printf(" - File transfer completed for Run #%d.\n", run);
+                printf(" - Run #%d Data: Time=%.2fms; Speed=%.2fMB/s\n", run, elapsed_time, total_bandwidth_fn);
                 total_time += elapsed_time;
                 run++;
                 printf("Waiting for Sender response...\n");
@@ -138,10 +138,12 @@ int main(int argc, char **argv) {
 
     double average_time = total_time / (run - 1); // Exclude the run when exit message was received
     double total_bandwidth = (total / (1024 * 1024)) / (total_time / 1000); // Convert bytes/ms to MB/s
-
+    
+    printf("----------------------------------\n");
     printf("Statistics for the entire program:\n");
     printf("- Average time: %.2fms\n", average_time);
     printf("- Total average bandwidth: %.2fMB/s\n", total_bandwidth);
     printf("----------------------------------\n");
+    printf("Receiver end.\n");
     return 0;
 }
