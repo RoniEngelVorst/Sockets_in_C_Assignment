@@ -7,31 +7,10 @@
 #include <sys/time.h>
 #include <netinet/tcp.h>
 
-
 #define MAX_CLIENTS 1
 #define BUFFER_SIZE 1024
 
-struct stat{
-    int run;
-    double total_time;
-    double total_bandwidth_fn;
-};
-    
-void addStatistics(int run, double total_time, double total_bandwidth_fn, struct stat** s);
-void printStatistics(struct stat *s, double average, double total_bandwidth, int arrayLen);
-
-
-int main(int argc, char**argv) {
-    
-    struct stat *Statistics = NULL;
-    Statistics = (struct stat *)malloc(5 * sizeof(struct stat));
-    if (Statistics == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
-        return 1;
-    }
-    int arrayLen = 5;
-
-
+int main(int argc, char **argv) {
     if (argc != 5) {
         fprintf(stderr, "Usage: %s <port> <algorithm>\n", argv[0]);
         return 1;
@@ -49,9 +28,6 @@ int main(int argc, char**argv) {
         return 1;
     }
     socklen_t len = strlen(algorithm) + 1;
-
-    
-
 
     struct timeval start_time, end_time;
     double total_time = 0;
@@ -94,7 +70,7 @@ int main(int argc, char**argv) {
     }
 
     printf("Waiting for TCP connections...\n");
-
+    int total = 0;
     int run = 1;
     while (1) {
         int client_sock = accept(sock, (struct sockaddr *)&sender, &sender_len);
@@ -114,15 +90,42 @@ int main(int argc, char**argv) {
             exit(EXIT_FAILURE);
         }
 
+        total_bytes_received = 0; // Reset total bytes received for this run
         char buffer[BUFFER_SIZE];
-        int bytes_received;
-        while ((bytes_received = recv(client_sock, buffer, BUFFER_SIZE, 0)) > 0) {
-            fwrite(buffer, sizeof(char), bytes_received, file);
+        int bytes_received = 1;
+        unsigned int expectedBytes = 1<<21;
+        while(bytes_received){
+            bytes_received = recv(client_sock, buffer, BUFFER_SIZE, 0);
+            if(bytes_received < 0){
+                perror("recv");
+                exit(EXIT_FAILURE);
+            } else if (bytes_received == 0) {
+                // Socket closed by sender
+                break;
+            }
             total_bytes_received += bytes_received;
+            total += bytes_received;
+            if(total_bytes_received >= expectedBytes){
+                // Print statistics and reset for next chunk
+                gettimeofday(&end_time, NULL);
+                double elapsed_time = (end_time.tv_sec - start_time.tv_sec) * 1000.0;
+                elapsed_time += (end_time.tv_usec - start_time.tv_usec) / 1000.0;
+                double total_bandwidth_fn = (total_bytes_received / (1024 * 1024)) / (elapsed_time / 1000); // Convert bytes/ms to MB/s
+                printf("File transfer completed for Run #%d.\n", run);
+                printf("- Run #%d Data: Time=%.2fms; Speed=%.2fMB/s\n", run, elapsed_time, total_bandwidth_fn);
+                total_time += elapsed_time;
+                run++;
+                printf("Waiting for Sender response...\n");
+                total_bytes_received = 0; // Reset for next chunk
+                gettimeofday(&start_time, NULL);
+            }
+
         }
 
-        printf("File transfer completed for Run #%d.\n", run);
-        printf("Waiting for Sender response...\n");
+        fclose(file);
+        close(client_sock);
+
+
 
         if (bytes_received == 0) {
             printf("Sender closed the connection.\n");
@@ -131,71 +134,14 @@ int main(int argc, char**argv) {
             perror("recv");
             exit(EXIT_FAILURE);
         }
-
-
-        gettimeofday(&end_time, NULL);
-        fclose(file);
-        close(client_sock);
-
-
-        double elapsed_time = (end_time.tv_sec - start_time.tv_sec) * 1000.0;
-        elapsed_time += (end_time.tv_usec - start_time.tv_usec) / 1000.0;
-        total_time += elapsed_time;
-        double total_bandwidth_fn = (total_bytes_received / (1024 * 1024)) / (total_time / 1000); // Convert bytes/ms to MB/s
-
-        // Memory reallocation logic
-        if (run > arrayLen) {
-            struct stat *temp = realloc(Statistics, (arrayLen * 2) * sizeof(struct stat));
-            if (temp == NULL) {
-                fprintf(stderr, "Memory reallocation failed\n");
-                free(Statistics); // Free previously allocated memory
-                return 1;
-            } else {
-                Statistics = temp; // Update pointer if reallocation was successful
-            }
-            arrayLen = arrayLen * 2;
-        }
-
-        addStatistics(run, total_time, total_bandwidth_fn, &Statistics);
-        
-        run++;
-
-        // // Check for exit message
-        // char exit_message[BUFFER_SIZE] = {0};
-        // recv(client_sock, exit_message, BUFFER_SIZE, 0);
-        // if (strcmp(exit_message, "EXIT") == 0) {
-        //     printf("Received exit message from sender.\n");
-        //     break;
-        // }
     }
 
     double average_time = total_time / (run - 1); // Exclude the run when exit message was received
-    double total_bandwidth = (total_bytes_received / (1024 * 1024)) / (total_time / 1000); // Convert bytes/ms to MB/s
+    double total_bandwidth = (total / (1024 * 1024)) / (total_time / 1000); // Convert bytes/ms to MB/s
 
-    // Printing statistics
-    printStatistics(Statistics, average_time, total_bandwidth, arrayLen);
-
-    // Freeing memory
-    free(Statistics);
-
-
-    return 0;
-}
-void addStatistics(int run, double total_time, double total_bandwidth_fn, struct stat** s){
-    s[run-1]->run = run;
-    s[run-1]->total_time = total_time;
-    s[run-1]->total_bandwidth_fn = total_bandwidth_fn;
-}
-
-void printStatistics(struct stat *s, double average, double total_bandwidth, int arrayLen){
-    printf("----------------------------------\n");
-    printf("- * Statistics * -\n");
-    for(int i = 0; i < arrayLen; i++){
-        if(&s[i] != NULL){
-            printf("- Run #%d Data: Time=%.2fms; Speed=%.2fMB/s\n", s[i].run, s[i].total_time, s[i].total_bandwidth_fn);
-        } 
-    }
-    printf("- Average time: %.2fms\n", average);
+    printf("Statistics for the entire program:\n");
+    printf("- Average time: %.2fms\n", average_time);
     printf("- Total average bandwidth: %.2fMB/s\n", total_bandwidth);
     printf("----------------------------------\n");
+    return 0;
 }

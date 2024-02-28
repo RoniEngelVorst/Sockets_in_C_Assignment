@@ -107,13 +107,6 @@ int main(int argc, char** argv) {
         printf("Do you want to send the file again? (y/n): ");
         scanf(" %c", &choice);
         if (choice != 'y') {
-            // // If user chooses not to send again, send exit message
-            // char *exit_message = "EXIT"; // Define your exit message
-            // if (send(sock, exit_message, strlen(exit_message), 0) < 0) {
-            //     perror("Send failed");
-            //     exit(EXIT_FAILURE);
-            // }
-            // close(sock); // Close socket after use
             break; // Exit the loop
         }
     }
