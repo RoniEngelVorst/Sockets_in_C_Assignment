@@ -16,12 +16,21 @@
 #include <sys/time.h>
 #include "RUDP_API.h"
 
+#define BUFFER_SIZE 1024
+
+
 
 struct RUDPHeader{
     uint16_t length;    // 2 bytes for length
     uint16_t checksum;  // 2 bytes for checksum
     uint8_t flags;      // 1 byte for flags
 };
+
+typedef struct {
+    uint32_t seq_num;   // Sequence number
+    // Other fields as needed
+    char data[BUFFER_SIZE];  // Data payload
+} RUDP_Packet;
 
 // Define flags for the RUDP protocol
 #define SYN_FLAG    0x01

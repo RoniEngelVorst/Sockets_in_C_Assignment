@@ -55,6 +55,9 @@ int main(int argc, char** argv) {
         exit(EXIT_FAILURE);
     }
 
+    int sequence_number = 0;
+    RUDP_Packet packet;
+
     while (1) {
         // Generate random data
         unsigned int file_size = 2 * 1024 * 1024; // 2MB

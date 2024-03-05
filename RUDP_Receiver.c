@@ -26,52 +26,76 @@ int main(int argc, char **argv) {
     double total_time = 0;
     unsigned int total_bytes_received = 0;
 
-    int sock = rudp_socket(false, RECEIVER_PORT); // Create a RUDP socket (client mode)
-    if (sock < 0) {
+    // Create a RUDP socket (server mode)
+    int server_sock = rudp_socket(true, RECEIVER_PORT);
+    if (server_sock < 0) {
         perror("Socket creation failed");
         exit(EXIT_FAILURE);
     }
 
-    // Connection establishment for RUDP
-    if (rudp_accept(sock) < 0) {
-        fprintf(stderr, "Connection establishment failed\n");
-        rudp_close(sock);
+    // Listen for incoming connections
+    if (rudp_listen(server_sock) < 0) {
+        perror("Listen failed");
+        rudp_close(server_sock);
         exit(EXIT_FAILURE);
     }
 
-    printf("Waiting for UDP packets on port %d...\n", RECEIVER_PORT);
+    printf("Waiting for RUDP connections..\n");
+
+    // Accept incoming connections
+    int client_sock = rudp_accept(server_sock);
+    if (client_sock < 0) {
+        perror("Accept failed");
+        rudp_close(server_sock);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Connection accepted. Ready to receive data.\n");
 
     int run = 1;
     while (1) {
-        struct sockaddr_in sender;
-        socklen_t sender_len = sizeof(sender);
-        char buffer[BUFFER_SIZE];
-
         printf("Waiting for packet for Run #%d...\n", run);
 
-        int bytes_received = rudp_recv(sock, buffer, BUFFER_SIZE);
+        char buffer[BUFFER_SIZE];
+        int bytes_received = rudp_recv(client_sock, buffer, BUFFER_SIZE);
         if (bytes_received < 0) {
             perror("recvfrom");
-            rudp_close(sock);
+            rudp_close(client_sock);
+            rudp_close(server_sock);
             return 1;
         }
 
-        gettimeofday(&end_time, NULL);
-        double elapsed_time = (end_time.tv_sec - start_time.tv_sec) * 1000.0;
-        elapsed_time += (end_time.tv_usec - start_time.tv_usec) / 1000.0;
-        
+        printf("Received packet for Run #%d...\n", run);
+
+        // Process received data...
+
         total_bytes_received += bytes_received;
-        total_time += elapsed_time;
 
-        double total_bandwidth = (total_bytes_received / (1024 * 1024)) / (total_time / 1000); // Convert bytes/ms to MB/s
-
-        printf("Received packet for Run #%d:\n", run);
-        printf("- Data: Time=%.2fms; Speed=%.2fMB/s\n", elapsed_time, total_bandwidth);
-
-        run++;
+        if (total_bytes_received >= (1 << 21)) {
+            gettimeofday(&end_time, NULL);
+            double elapsed_time = (end_time.tv_sec - start_time.tv_sec) * 1000.0;
+            elapsed_time += (end_time.tv_usec - start_time.tv_usec) / 1000.0;
+            double total_bandwidth_fn = (total_bytes_received / (1024 * 1024)) / (elapsed_time / 1000);
+            printf(" - File transfer completed for Run #%d.\n", run);
+            printf(" - Run #%d Data: Time=%.2fms; Speed=%.2fMB/s\n", run, elapsed_time, total_bandwidth_fn);
+            total_time += elapsed_time;
+            run++;
+            printf("Waiting for Sender response...\n");
+            total_bytes_received = 0;
+            gettimeofday(&start_time, NULL);
+        }
     }
 
-    rudp_close(sock);
+    // Close the sockets
+    rudp_disconnect(client_sock);
+    rudp_close(client_sock);
+    rudp_close(server_sock);
 
+    double average_time = total_time / (run - 1);
+    printf("----------------------------------\n");
+    printf("Statistics for the entire program:\n");
+    printf("- Average time: %.2fms\n", average_time);
+    printf("----------------------------------\n");
+    printf("Receiver end.\n");
     return 0;
 }

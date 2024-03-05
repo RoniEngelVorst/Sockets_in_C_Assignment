@@ -26,6 +26,12 @@ struct RUDPHeader{
     uint8_t flags;      // 1 byte for flags
 };
 
+typedef struct {
+    uint32_t seq_num;   // Sequence number
+    // Other fields as needed
+    char data[BUFFER_SIZE];  // Data payload
+} RUDP_Packet;
+
 typedef struct _rudp_socket {
     int socket_fd; // UDP socket file descriptor
     bool isServer; // True if the RUDP socket acts like a server, false for client.
