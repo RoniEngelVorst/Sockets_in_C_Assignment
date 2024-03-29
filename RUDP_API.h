@@ -28,8 +28,8 @@ struct RUDPHeader{
 
 typedef struct {
     uint32_t seq_num;   // Sequence number
-    // Other fields as needed
     char data[BUFFER_SIZE];  // Data payload
+    struct RUDPHeader header; //The header
 } RUDP_Packet;
 
 // Define flags for the RUDP protocol
@@ -60,5 +60,7 @@ int rudp_disconnect(RUDP_Socket *sockfd);
 
 // Closes the RUDP socket
 int rudp_close(RUDP_Socket *sockfd);
+
+unsigned short int calculate_checksum(void *data, unsigned int bytes);
 
 #endif

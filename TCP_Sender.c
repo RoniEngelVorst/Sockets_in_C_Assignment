@@ -78,7 +78,7 @@ int main(int argc, char** argv) {
     server_address.sin_addr.s_addr = inet_addr(SERVER_IP);
     server_address.sin_port = htons(SERVER_PORT);
     
-    //connecting the adress parameters to the socket
+    //connecting to the server
     if (connect(sock, (struct sockaddr *)&server_address, sizeof(server_address)) < 0) {
         perror("Connection failed");
         close(sock);

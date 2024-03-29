@@ -20,17 +20,17 @@
 #define ACK_FLAG    0x04
 
 
-struct RUDPHeader{
-    uint16_t length;    // 2 bytes for length
-    uint16_t checksum;  // 2 bytes for checksum
-    uint8_t flags;      // 1 byte for flags
-};
+// struct RUDPHeader{
+//     uint16_t length;    // 2 bytes for length
+//     uint16_t checksum;  // 2 bytes for checksum
+//     uint8_t flags;      // 1 byte for flags
+// };
 
-typedef struct {
-    uint32_t seq_num;   // Sequence number
-    // Other fields as needed
-    char data[BUFFER_SIZE];  // Data payload
-} RUDP_Packet;
+// typedef struct {
+//     uint32_t seq_num;   // Sequence number
+//     char data[BUFFER_SIZE];  // Data payload
+//     struct RUDPHeader header; //The header
+// } RUDP_Packet;
 
 typedef struct _rudp_socket {
     int socket_fd; // UDP socket file descriptor
@@ -38,6 +38,10 @@ typedef struct _rudp_socket {
     bool isConnected; // True if there is an active connection, false otherwise.
     struct sockaddr_in dest_addr; // Destination address. Client fills it when it connects via rudp_connect(), server fills it when it accepts a connection via rudp_accept().
 } RUDP_Socket;
+
+int sequence_number = 0; // Initial sequence number
+unsigned expected_sequence_number = 0; // Initial expected sequence number
+
 
 // Allocates a new structure for the RUDP socket
 RUDP_Socket* rudp_socket(bool isServer, unsigned short int listen_port) {
@@ -153,13 +157,38 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
         return -1;
     }
 
+    RUDP_Packet packet;
     struct sockaddr_in sender_addr;
     socklen_t sender_len = sizeof(sender_addr);
-    int bytes_received = recvfrom(sockfd->socket_fd, buffer, buffer_size, 0, (struct sockaddr *)&sender_addr, &sender_len);
+
+    // Receive the packet
+    int bytes_received = recvfrom(sockfd->socket_fd, &packet, sizeof(packet), 0, (struct sockaddr *)&sender_addr, &sender_len);
     if (bytes_received < 0) {
         perror("recvfrom");
         return -1;
     }
+
+    // Verify sequence number
+    if (packet.seq_num != expected_sequence_number) {
+        fprintf(stderr, "Invalid sequence number. Expected: %d, Received: %d\n", expected_sequence_number, packet.seq_num);
+        return -1;
+    }
+
+    // Verify checksum
+    unsigned short int received_checksum = packet.header.checksum;
+    packet.header.checksum = 0;  // Reset checksum field before calculating checksum
+    unsigned short int calculated_checksum = calculate_checksum(&packet, bytes_received);
+    if (received_checksum != calculated_checksum) {
+        fprintf(stderr, "Checksum verification failed.\n");
+        return -1;
+    }
+
+    // Copy data from packet to buffer
+    memcpy(buffer, packet.data, buffer_size);
+
+    // Increment expected sequence number for the next packet
+    expected_sequence_number++;
+
     return bytes_received;
 }
 
@@ -170,7 +199,17 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
         return -1;
     }
 
-    int bytes_sent = sendto(sockfd->socket_fd, buffer, buffer_size, 0, (struct sockaddr *)&(sockfd->dest_addr), sizeof(sockfd->dest_addr));
+    // Create RUDP packet
+    RUDP_Packet packet;
+    packet.seq_num = sequence_number++; // Assign sequence number
+    memcpy(packet.data, buffer, buffer_size);
+    packet.header.length = htons(buffer_size); // Convert length to network byte order
+
+    // Calculate checksum for the entire packet (header + data)
+    packet.header.checksum = calculate_checksum(&packet, sizeof(packet));
+
+    // Send the packet
+    int bytes_sent = sendto(sockfd->socket_fd, &packet, sizeof(packet), 0, (struct sockaddr *)&(sockfd->dest_addr), sizeof(sockfd->dest_addr));
     if (bytes_sent < 0) {
         perror("sendto");
         return -1;
@@ -199,4 +238,33 @@ int rudp_close(RUDP_Socket *sockfd) {
         free(sockfd);
     }
     return 0;
+}
+
+/*
+* @brief A checksum function that returns 16 bit checksum for data.
+* @param data The data to do the checksum for.
+* @param bytes The length of the data in bytes.
+* @return The checksum itself as 16 bit unsigned number.
+* @note This function is taken from RFC1071, can be found here:
+* @note https://tools.ietf.org/html/rfc1071
+* @note It is the simplest way to calculate a checksum and is not very strong.
+* However, it is good enough for this assignment.
+* @note You are free to use any other checksum function as well.
+* You can also use this function as such without any change.
+*/
+unsigned short int calculate_checksum(void *data, unsigned int bytes) {
+ unsigned short int *data_pointer = (unsigned short int *)data;
+ unsigned int total_sum = 0;
+ // Main summing loop
+ while (bytes > 1) {
+ total_sum += *data_pointer++;
+ bytes -= 2;
+ }
+ // Add left-over byte, if any
+ if (bytes > 0)
+ total_sum += *((unsigned char *)data_pointer);
+ // Fold 32-bit sum to 16 bits
+ while (total_sum >> 16)
+ total_sum = (total_sum & 0xFFFF) + (total_sum >> 16);
+ return (~((unsigned short int)total_sum));
 }

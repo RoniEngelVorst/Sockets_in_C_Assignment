@@ -23,8 +23,8 @@ char *util_generate_random_data(unsigned int size) {
 }
 
 int main(int argc, char** argv) {
-    if (argc != 7) {
-        fprintf(stderr, "Usage: %s <port> <algorithm>\n", argv[0]);
+    if (argc != 5) {
+        fprintf(stderr, "Usage: %s <port> \n", argv[0]);
         return 1;
     }
 
@@ -36,8 +36,8 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    int sock = rudp_socket(true, atoi(argv[2])); // Create a RUDP socket (server mode)
-    if (sock < 0) {
+    RUDP_Socket *sock = rudp_socket(true, atoi(argv[2])); // Create a RUDP socket (server mode)
+    if (sock == NULL) {
         perror("Socket creation failed");
         exit(EXIT_FAILURE);
     }
@@ -63,18 +63,21 @@ int main(int argc, char** argv) {
         unsigned int file_size = 2 * 1024 * 1024; // 2MB
         char *data = util_generate_random_data(file_size);
 
-        // Send the file
-        size_t total_bytes_sent = 0;
-        while (total_bytes_sent < file_size) {
-            size_t bytes_to_send = BUFFER_SIZE;
-            if (total_bytes_sent + bytes_to_send > file_size) {
-                bytes_to_send = file_size - total_bytes_sent;
-            }
-            if (rudp_send(sock, data + total_bytes_sent, bytes_to_send) < 0) {
-                perror("Send failed");
-                exit(EXIT_FAILURE);
-            }
-            total_bytes_sent += bytes_to_send;
+        // Create RUDP packet
+        RUDP_Packet packet;
+        packet.seq_num = sequence_number++; // Assign sequence number
+        memcpy(packet.data, data, BUFFER_SIZE);
+        packet.header.length = htons(BUFFER_SIZE); // Convert length to network byte order
+
+        // Calculate checksum for the entire packet (header + data)
+        packet.header.checksum = calculate_checksum(&packet, sizeof(packet));
+
+        // Send the packet
+        int bytes_sent = rudp_send(sock, &packet, sizeof(packet));
+        if (bytes_sent < 0) {
+            perror("Send failed");
+            free(data);
+            exit(EXIT_FAILURE);
         }
 
         // Cleanup
