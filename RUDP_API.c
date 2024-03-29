@@ -11,7 +11,7 @@
 #include "RUDP_API.h"
 
 
-#define BUFFER_SIZE 1024
+// #define BUFFER_SIZE 1024
 #define TIMEOUT_SEC 5 // Timeout in seconds for receiving acknowledgments
 
 // Define flags for the RUDP protocol
@@ -45,6 +45,37 @@ unsigned expected_sequence_number = 0; // Initial expected sequence number
 
 // Allocates a new structure for the RUDP socket
 RUDP_Socket* rudp_socket(bool isServer, unsigned short int listen_port) {
+    // RUDP_Socket *sock = malloc(sizeof(RUDP_Socket));
+    // if (sock == NULL) {
+    //     perror("Memory allocation failed");
+    //     exit(EXIT_FAILURE);
+    // }
+
+    // // Create UDP socket
+    // int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    // if (sockfd < 0) {
+    //     perror("Socket creation failed");
+    //     exit(EXIT_FAILURE);
+    // }
+    // sock->socket_fd = sockfd;
+    // sock->isServer = isServer;
+    // sock->isConnected = false;
+
+    // // Server binds to port
+    // if (isServer) {
+    //     struct sockaddr_in server_addr;
+    //     memset(&server_addr, 0, sizeof(server_addr));
+    //     server_addr.sin_family = AF_INET;
+    //     server_addr.sin_addr.s_addr = INADDR_ANY;
+    //     server_addr.sin_port = htons(listen_port);
+
+    //     if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+    //         perror("Bind failed");
+    //         exit(EXIT_FAILURE);
+    //     }
+    // }
+
+    // return sock;
     RUDP_Socket *sock = malloc(sizeof(RUDP_Socket));
     if (sock == NULL) {
         perror("Memory allocation failed");
@@ -60,6 +91,13 @@ RUDP_Socket* rudp_socket(bool isServer, unsigned short int listen_port) {
     sock->socket_fd = sockfd;
     sock->isServer = isServer;
     sock->isConnected = false;
+
+    // Set SO_REUSEADDR option
+    int optval = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
+        perror("Setting SO_REUSEADDR option failed");
+        exit(EXIT_FAILURE);
+    }
 
     // Server binds to port
     if (isServer) {
@@ -80,6 +118,42 @@ RUDP_Socket* rudp_socket(bool isServer, unsigned short int listen_port) {
 
 // Tries to connect to the other side via RUDP
 int rudp_connect(RUDP_Socket *sockfd, const char *dest_ip, unsigned short int dest_port) {
+    // if (sockfd->isServer || sockfd->isConnected) {
+    //     fprintf(stderr, "Invalid operation: Socket is already connected or set to server.\n");
+    //     return 0;
+    // }
+
+    // sockfd->dest_addr.sin_family = AF_INET;
+    // sockfd->dest_addr.sin_addr.s_addr = inet_addr(dest_ip);
+    // sockfd->dest_addr.sin_port = htons(dest_port);
+
+    // // Send SYN packet
+    // // Set up the SYN packet and send it to the server
+    // struct timeval tv;
+    // tv.tv_sec = TIMEOUT_SEC;
+    // tv.tv_usec = 0;
+    // setsockopt(sockfd->socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+
+    // struct RUDPHeader syn_packet;
+    // syn_packet.flags = SYN_FLAG;
+    // sendto(sockfd->socket_fd, &syn_packet, sizeof(syn_packet), 0, (struct sockaddr *)&(sockfd->dest_addr), sizeof(sockfd->dest_addr));
+
+    // // Receive SYN-ACK packet
+    // struct RUDPHeader syn_ack_packet;
+    // socklen_t addr_len = sizeof(sockfd->dest_addr);
+    // ssize_t bytes_received = recvfrom(sockfd->socket_fd, &syn_ack_packet, sizeof(syn_ack_packet), 0, (struct sockaddr *)&(sockfd->dest_addr), &addr_len);
+    // if (bytes_received <= 0 || syn_ack_packet.flags != SYN_ACK_FLAG) {
+    //     fprintf(stderr, "Connection failed: SYN-ACK not received.\n");
+    //     return 0;
+    // }
+
+    // // Send ACK packet
+    // struct RUDPHeader ack_packet;
+    // ack_packet.flags = ACK_FLAG;
+    // sendto(sockfd->socket_fd, &ack_packet, sizeof(ack_packet), 0, (struct sockaddr *)&(sockfd->dest_addr), sizeof(sockfd->dest_addr));
+
+    // sockfd->isConnected = true;
+    // return 1;
     if (sockfd->isServer || sockfd->isConnected) {
         fprintf(stderr, "Invalid operation: Socket is already connected or set to server.\n");
         return 0;
@@ -88,6 +162,13 @@ int rudp_connect(RUDP_Socket *sockfd, const char *dest_ip, unsigned short int de
     sockfd->dest_addr.sin_family = AF_INET;
     sockfd->dest_addr.sin_addr.s_addr = inet_addr(dest_ip);
     sockfd->dest_addr.sin_port = htons(dest_port);
+
+    // Set SO_REUSEADDR option
+    int optval = 1;
+    if (setsockopt(sockfd->socket_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
+        perror("Setting SO_REUSEADDR option failed");
+        exit(EXIT_FAILURE);
+    }
 
     // Send SYN packet
     // Set up the SYN packet and send it to the server
@@ -150,6 +231,8 @@ int rudp_accept(RUDP_Socket *sockfd) {
     sockfd->isConnected = true;
     return 1;
 }
+
+
 // Receives data from the other side
 int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
     if (!sockfd->isConnected) {

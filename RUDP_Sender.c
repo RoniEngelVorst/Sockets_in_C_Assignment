@@ -36,11 +36,12 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    RUDP_Socket *sock = rudp_socket(true, atoi(argv[2])); // Create a RUDP socket (server mode)
+    RUDP_Socket *sock = rudp_socket(true, SERVER_PORT); // Create a RUDP socket (server mode)
     if (sock == NULL) {
         perror("Socket creation failed");
         exit(EXIT_FAILURE);
     }
+    
 
     struct sockaddr_in server_address;
     memset(&server_address, 0, sizeof(server_address));
@@ -56,7 +57,7 @@ int main(int argc, char** argv) {
     }
 
     int sequence_number = 0;
-    RUDP_Packet packet;
+    // RUDP_Packet packet;
 
     while (1) {
         // Generate random data
