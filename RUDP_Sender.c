@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    RUDP_Socket *sock = rudp_socket(true, SERVER_PORT); // Create a RUDP socket (server mode)
+    RUDP_Socket *sock = rudp_socket(false, SERVER_PORT); // Create a RUDP socket (server mode)
     if (sock == NULL) {
         perror("Socket creation failed");
         exit(EXIT_FAILURE);

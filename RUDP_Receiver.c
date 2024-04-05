@@ -77,6 +77,7 @@ int main(int argc, char **argv) {
         }
     }
 
+    rudp_disconnect(server_sock);
     // Close the socket
     rudp_close(server_sock);
 

@@ -45,37 +45,6 @@ unsigned expected_sequence_number = 0; // Initial expected sequence number
 
 // Allocates a new structure for the RUDP socket
 RUDP_Socket* rudp_socket(bool isServer, unsigned short int listen_port) {
-    // RUDP_Socket *sock = malloc(sizeof(RUDP_Socket));
-    // if (sock == NULL) {
-    //     perror("Memory allocation failed");
-    //     exit(EXIT_FAILURE);
-    // }
-
-    // // Create UDP socket
-    // int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    // if (sockfd < 0) {
-    //     perror("Socket creation failed");
-    //     exit(EXIT_FAILURE);
-    // }
-    // sock->socket_fd = sockfd;
-    // sock->isServer = isServer;
-    // sock->isConnected = false;
-
-    // // Server binds to port
-    // if (isServer) {
-    //     struct sockaddr_in server_addr;
-    //     memset(&server_addr, 0, sizeof(server_addr));
-    //     server_addr.sin_family = AF_INET;
-    //     server_addr.sin_addr.s_addr = INADDR_ANY;
-    //     server_addr.sin_port = htons(listen_port);
-
-    //     if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-    //         perror("Bind failed");
-    //         exit(EXIT_FAILURE);
-    //     }
-    // }
-
-    // return sock;
     RUDP_Socket *sock = malloc(sizeof(RUDP_Socket));
     if (sock == NULL) {
         perror("Memory allocation failed");
