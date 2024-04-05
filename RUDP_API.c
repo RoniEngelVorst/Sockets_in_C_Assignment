@@ -20,6 +20,12 @@
 #define ACK_FLAG    0x04
 
 
+// #define MAX_BUFFERED_PACKETS 100 // Maximum number of packets to buffer
+
+// BufferedPacket buffered_packets[MAX_BUFFERED_PACKETS]; // Buffer to hold sent packets
+// int next_buffer_index = 0; // Index to track the next available slot in the buffer
+
+
 // struct RUDPHeader{
 //     uint16_t length;    // 2 bytes for length
 //     uint16_t checksum;  // 2 bytes for checksum
@@ -87,42 +93,6 @@ RUDP_Socket* rudp_socket(bool isServer, unsigned short int listen_port) {
 
 // Tries to connect to the other side via RUDP
 int rudp_connect(RUDP_Socket *sockfd, const char *dest_ip, unsigned short int dest_port) {
-    // if (sockfd->isServer || sockfd->isConnected) {
-    //     fprintf(stderr, "Invalid operation: Socket is already connected or set to server.\n");
-    //     return 0;
-    // }
-
-    // sockfd->dest_addr.sin_family = AF_INET;
-    // sockfd->dest_addr.sin_addr.s_addr = inet_addr(dest_ip);
-    // sockfd->dest_addr.sin_port = htons(dest_port);
-
-    // // Send SYN packet
-    // // Set up the SYN packet and send it to the server
-    // struct timeval tv;
-    // tv.tv_sec = TIMEOUT_SEC;
-    // tv.tv_usec = 0;
-    // setsockopt(sockfd->socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
-
-    // struct RUDPHeader syn_packet;
-    // syn_packet.flags = SYN_FLAG;
-    // sendto(sockfd->socket_fd, &syn_packet, sizeof(syn_packet), 0, (struct sockaddr *)&(sockfd->dest_addr), sizeof(sockfd->dest_addr));
-
-    // // Receive SYN-ACK packet
-    // struct RUDPHeader syn_ack_packet;
-    // socklen_t addr_len = sizeof(sockfd->dest_addr);
-    // ssize_t bytes_received = recvfrom(sockfd->socket_fd, &syn_ack_packet, sizeof(syn_ack_packet), 0, (struct sockaddr *)&(sockfd->dest_addr), &addr_len);
-    // if (bytes_received <= 0 || syn_ack_packet.flags != SYN_ACK_FLAG) {
-    //     fprintf(stderr, "Connection failed: SYN-ACK not received.\n");
-    //     return 0;
-    // }
-
-    // // Send ACK packet
-    // struct RUDPHeader ack_packet;
-    // ack_packet.flags = ACK_FLAG;
-    // sendto(sockfd->socket_fd, &ack_packet, sizeof(ack_packet), 0, (struct sockaddr *)&(sockfd->dest_addr), sizeof(sockfd->dest_addr));
-
-    // sockfd->isConnected = true;
-    // return 1;
     if (sockfd->isServer || sockfd->isConnected) {
         fprintf(stderr, "Invalid operation: Socket is already connected or set to server.\n");
         return 0;
@@ -204,6 +174,7 @@ int rudp_accept(RUDP_Socket *sockfd) {
 
 // Receives data from the other side
 int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
+    // return bytes_received;
     if (!sockfd->isConnected) {
         fprintf(stderr, "Invalid operation: Socket is not connected.\n");
         return -1;
@@ -220,16 +191,18 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
         return -1;
     }
 
+
     // Verify sequence number
     if (packet.seq_num != expected_sequence_number) {
         fprintf(stderr, "Invalid sequence number. Expected: %d, Received: %d\n", expected_sequence_number, packet.seq_num);
         return -1;
     }
 
-    // Verify checksum
+    // Calculate checksum for the data
     unsigned short int received_checksum = packet.header.checksum;
     packet.header.checksum = 0;  // Reset checksum field before calculating checksum
-    unsigned short int calculated_checksum = calculate_checksum(&packet, bytes_received);
+    unsigned short int calculated_checksum = calculate_checksum(packet.data, bytes_received);
+    printf("receiver checksum is %hu\n", calculated_checksum);
     if (received_checksum != calculated_checksum) {
         fprintf(stderr, "Checksum verification failed.\n");
         return -1;
@@ -241,6 +214,11 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
     // Increment expected sequence number for the next packet
     expected_sequence_number++;
 
+    // Send ACK back to the sender
+    struct RUDPHeader ack_packet;
+    ack_packet.flags = ACK_FLAG;
+    sendto(sockfd->socket_fd, &ack_packet, sizeof(ack_packet), 0, (struct sockaddr *)&sender_addr, sender_len);
+    
     return bytes_received;
 }
 
@@ -257,15 +235,28 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
     memcpy(packet.data, buffer, buffer_size);
     packet.header.length = htons(buffer_size); // Convert length to network byte order
 
-    // Calculate checksum for the entire packet (header + data)
-    packet.header.checksum = calculate_checksum(&packet, sizeof(packet));
+    // Calculate checksum for the data
+    packet.header.checksum = calculate_checksum(packet.data, buffer_size);
+    printf("sender checksum is %u\n", packet.header.checksum);
 
     // Send the packet
-    int bytes_sent = sendto(sockfd->socket_fd, &packet, sizeof(packet), 0, (struct sockaddr *)&(sockfd->dest_addr), sizeof(sockfd->dest_addr));
+    int bytes_sent = sendto(sockfd->socket_fd, &packet, sizeof(RUDP_Packet), 0, (struct sockaddr *)&(sockfd->dest_addr), sizeof(sockfd->dest_addr));
     if (bytes_sent < 0) {
         perror("sendto");
         return -1;
     }
+    
+    // // Buffer the sent packet information
+    // if (next_buffer_index < MAX_BUFFERED_PACKETS) {
+    //     buffered_packets[next_buffer_index].packet = packet; // Store the packet
+    //     gettimeofday(&buffered_packets[next_buffer_index].sent_time, NULL); // Record the sent time
+    //     buffered_packets[next_buffer_index].ack_received = false; // Initialize acknowledgment flag
+    //     next_buffer_index++; // Move to the next available slot in the buffer
+    // } else {
+    //     fprintf(stderr, "Error: Buffered packet limit reached. Unable to buffer sent packet.\n");
+    //     // Handle the error condition appropriately
+    // }
+
     return bytes_sent;
 }
 
@@ -305,18 +296,18 @@ int rudp_close(RUDP_Socket *sockfd) {
 * You can also use this function as such without any change.
 */
 unsigned short int calculate_checksum(void *data, unsigned int bytes) {
- unsigned short int *data_pointer = (unsigned short int *)data;
- unsigned int total_sum = 0;
- // Main summing loop
- while (bytes > 1) {
- total_sum += *data_pointer++;
- bytes -= 2;
- }
- // Add left-over byte, if any
- if (bytes > 0)
- total_sum += *((unsigned char *)data_pointer);
- // Fold 32-bit sum to 16 bits
- while (total_sum >> 16)
- total_sum = (total_sum & 0xFFFF) + (total_sum >> 16);
- return (~((unsigned short int)total_sum));
+    unsigned short int *data_pointer = (unsigned short int *)data;
+    unsigned int total_sum = 0;
+    // Main summing loop
+    while (bytes > 1) {
+    total_sum += *data_pointer++;
+    bytes -= 2;
+    }
+    // Add left-over byte, if any
+    if (bytes > 0)
+    total_sum += *((unsigned char *)data_pointer);
+    // Fold 32-bit sum to 16 bits
+    while (total_sum >> 16)
+    total_sum = (total_sum & 0xFFFF) + (total_sum >> 16);
+    return (~((unsigned short int)total_sum));
 }

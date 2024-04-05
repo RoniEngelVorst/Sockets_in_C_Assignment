@@ -18,6 +18,11 @@
 
 #define BUFFER_SIZE 1024
 
+// typedef struct {
+//     RUDP_Packet packet; // The packet
+//     struct timeval sent_time; // Timestamp when the packet was sent
+//     bool ack_received; // Flag to track acknowledgment
+// } BufferedPacket;
 
 
 struct RUDPHeader{
