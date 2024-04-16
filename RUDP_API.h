@@ -25,16 +25,16 @@
 // } BufferedPacket;
 
 
-struct RUDPHeader{
+typedef struct {
     uint16_t length;    // 2 bytes for length
     uint16_t checksum;  // 2 bytes for checksum
     uint8_t flags;      // 1 byte for flags
-};
+}RUDPHeader;
 
 typedef struct {
     uint32_t seq_num;   // Sequence number
     char data[BUFFER_SIZE];  // Data payload
-    struct RUDPHeader header; //The header
+    RUDPHeader header; //The header
 } RUDP_Packet;
 
 // Define flags for the RUDP protocol

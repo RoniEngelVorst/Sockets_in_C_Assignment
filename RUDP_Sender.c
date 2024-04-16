@@ -56,25 +56,36 @@ int main(int argc, char** argv) {
         exit(EXIT_FAILURE);
     }
 
-    int sequence_number = 0;
-    // RUDP_Packet packet;
-
-    while (1) {
-        // Generate random data
+    // Generate random data
         unsigned int file_size = 2 * 1024 * 1024; // 2MB
         char *data = util_generate_random_data(file_size);
 
-        // Create RUDP packet
-        RUDP_Packet packet;
-        packet.seq_num = sequence_number++; // Assign sequence number
-        memcpy(packet.data, data, BUFFER_SIZE);
-        packet.header.length = htons(BUFFER_SIZE); // Convert length to network byte order
+    while (1) {
+        // // Generate random data
+        // unsigned int file_size = 2 * 1024 * 1024; // 2MB
+        // char *data = util_generate_random_data(file_size);
 
-        // Calculate checksum for the entire packet (header + data)
-        packet.header.checksum = calculate_checksum(&packet, sizeof(packet));
+        // // Create RUDP packet
+        // RUDP_Packet packet;
+        // struct RUDPHeader packet_header;
+        // packet.seq_num = sequence_number++; // Assign sequence number
+        // memcpy(packet.data, data, BUFFER_SIZE);
+        // packet.header = packet_header;
+        // packet.header.length = htons(packet.data); // Convert length to network byte order
 
+        // // Calculate checksum for the data
+        // packet.header.checksum = calculate_checksum(&packet.data, BUFFER_SIZE);
+
+        // int header_byte_sent = rudp_send(sock, &packet.header, sizeof(struct RUDPHeader));
+        // if(header_byte_sent < 0){
+        //     perror("Header send failed");
+        //     free(data);
+        //     exit(EXIT_FAILURE);
+        // }
+
+        
         // Send the packet
-        int bytes_sent = rudp_send(sock, &packet, sizeof(packet));
+        int bytes_sent = rudp_send(sock, data, file_size);
         if (bytes_sent < 0) {
             perror("Send failed");
             free(data);
@@ -89,6 +100,7 @@ int main(int argc, char** argv) {
         printf("Do you want to send the file again? (y/n): ");
         scanf(" %c", &choice);
         if (choice != 'y') {
+            free(data);
             break; // Exit the loop
         }
     }
