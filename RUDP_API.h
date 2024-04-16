@@ -16,7 +16,7 @@
 #include <sys/time.h>
 // #include "RUDP_API.h"
 
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 2*1024*1024
 
 // typedef struct {
 //     RUDP_Packet packet; // The packet
