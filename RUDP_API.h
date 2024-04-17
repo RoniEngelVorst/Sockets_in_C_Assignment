@@ -16,7 +16,7 @@
 #include <sys/time.h>
 // #include "RUDP_API.h"
 
-#define BUFFER_SIZE 2*1024*1024
+#define BUFFER_SIZE 65507
 
 // typedef struct {
 //     RUDP_Packet packet; // The packet
@@ -33,7 +33,7 @@ typedef struct {
 
 typedef struct {
     uint32_t seq_num;   // Sequence number
-    char data[BUFFER_SIZE];  // Data payload
+    char data[65400];  // Data payload
     RUDPHeader header; //The header
 } RUDP_Packet;
 

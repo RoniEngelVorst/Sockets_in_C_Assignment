@@ -22,24 +22,6 @@
 #define MAX_UDP_PAYLOAD_SIZE 65507
 
 
-// #define MAX_BUFFERED_PACKETS 100 // Maximum number of packets to buffer
-
-// BufferedPacket buffered_packets[MAX_BUFFERED_PACKETS]; // Buffer to hold sent packets
-// int next_buffer_index = 0; // Index to track the next available slot in the buffer
-
-
-// struct RUDPHeader{
-//     uint16_t length;    // 2 bytes for length
-//     uint16_t checksum;  // 2 bytes for checksum
-//     uint8_t flags;      // 1 byte for flags
-// };
-
-// typedef struct {
-//     uint32_t seq_num;   // Sequence number
-//     char data[BUFFER_SIZE];  // Data payload
-//     struct RUDPHeader header; //The header
-// } RUDP_Packet;
-
 typedef struct _rudp_socket {
     int socket_fd; // UDP socket file descriptor
     bool isServer; // True if the RUDP socket acts like a server, false for client.
@@ -173,70 +155,6 @@ int rudp_accept(RUDP_Socket *sockfd) {
     return 1;
 }
 
-
-// // Receives data from the other side
-// int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
-//     // return bytes_received;
-//     if (!sockfd->isConnected) {
-//         fprintf(stderr, "Invalid operation: Socket is not connected.\n");
-//         return -1;
-//     }
-
-//     RUDP_Packet packet;
-//     struct sockaddr_in sender_addr;
-//     socklen_t sender_len = sizeof(sender_addr);
-
-//     // Receive the packet
-//     int bytes_received = recvfrom(sockfd->socket_fd, buffer, buffer_size, 0, (struct sockaddr *)&sender_addr, &sender_len);
-//     if (bytes_received < 0) {
-//         perror("recvfrom");
-//         return -1;
-//     }
-
-//     size_t header_size = sizeof(RUDPHeader);  // Size of the header
-//     char *data_start = ((char *)buffer) + header_size;  // Pointer to the start of the data portion in the buffer
-//     size_t data_size = buffer_size - header_size;  // Size of the data portion
-
-//     memcpy(&packet.header, buffer, header_size);
-
-//     // Copy the data portion from the buffer to the packet
-//     memcpy(packet.data, data_start, data_size);
-
-//     printf("seq num is %u\n", packet.seq_num);
-//     // Verify sequence number
-//     if (packet.seq_num != expected_sequence_number) {
-//         fprintf(stderr, "Invalid sequence number. Expected: %d, Received: %d\n", expected_sequence_number, packet.seq_num);
-//         return -1;
-//     }
-
-
-//     // Calculate checksum for the data
-//     unsigned short int received_checksum = packet.header.checksum;
-//     packet.header.checksum = 0;  // Reset checksum field before calculating checksum
-//     unsigned short int calculated_checksum = calculate_checksum(packet.data, bytes_received);
-//     printf("bytes_received: %d\n", bytes_received);
-//     printf("receiver checksum is %hu\n", calculated_checksum);
-//     printf("receiver len packet is: %u\n", packet.header.length);
-    
-//     if (received_checksum != calculated_checksum) {
-//         fprintf(stderr, "Checksum verification failed.\n");
-//         return -1;
-//     }
-
-//     // // Copy data from packet to buffer
-//     // memcpy(buffer, packet.data, buffer_size);
-
-//     // Increment expected sequence number for the next packet
-//     expected_sequence_number++;
-
-//     // Send ACK back to the sender
-//     RUDPHeader ack_packet;
-//     ack_packet.flags = ACK_FLAG;
-//     sendto(sockfd->socket_fd, &ack_packet, sizeof(ack_packet), 0, (struct sockaddr *)&sender_addr, sender_len);
-    
-//     return bytes_received;
-// }
-
 int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
     if (!sockfd->isConnected) {
         fprintf(stderr, "Invalid operation: Socket is not connected.\n");
@@ -248,6 +166,8 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
     socklen_t sender_len = sizeof(sender_addr);
     int total_bytes_received = 0;
     unsigned int total_data_bytes_received = 0;
+    //check sequance number
+    uint32_t expected_seq_number = 1;
 
     while(1){
         // Receive the packet
@@ -258,13 +178,11 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
             return -1;
         }
 
-        //check sequance number
-        uint32_t expected_seq_number = 1;
+        
         if(expected_seq_number != packet.seq_num){
             fprintf(stderr, "Invalid sequence number. Expected: %d, Received: %d\n", expected_seq_number, packet.seq_num);
             return -1;
         }
-        expected_seq_number++;
 
         // Extract header information
         unsigned short int received_checksum = packet.header.checksum;
@@ -287,10 +205,8 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
         
         total_bytes_received = total_bytes_received + bytes_received;
         total_data_bytes_received = total_data_bytes_received + packet.header.length;
-        if(bytes_received < MAX_UDP_PAYLOAD_SIZE){
-            fprintf(stderr, "Finish receiving the file\n");
-            break;
-        }
+        
+        expected_seq_number++;
 
         if(total_data_bytes_received == buffer_size){
             fprintf(stderr, "Received enough bytes\n");
@@ -302,96 +218,6 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
     
 }
 
-
-// // Sends data to the other side
-// int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
-//     if(sockfd == NULL){
-//          printf(stderr, "Invalid RUDP socket\n");
-//         free(buffer);
-//         close(sockfd->socket_fd);
-//         return 0;
-//     }
-
-//     if (!sockfd->isConnected) {
-//         fprintf(stderr, "Invalid operation: Socket is not connected.\n");
-//         free(buffer);
-//         close(sockfd->socket_fd);
-//         return -1;
-//     }
-
-//     // // Create RUDP packet
-//     // RUDP_Packet p;
-//     // // Test data
-//     // unsigned char test_data[] = {0x01, 0x02, 0x03, 0x04, 0x05};
-
-//     // // Calculate checksum
-//     // unsigned short int checksum = calculate_checksum(test_data, sizeof(test_data));
-
-//     // // Print checksum
-//     // printf("Test Checksum: %hu\n", checksum);
-//     // p.seq_num = sequence_number++; // Assign sequence number
-//     // printf("seq num is %u\n", p.seq_num);
-//     // memcpy(p.data, test_data, sizeof(test_data));
-//     // p.header.length = htons(sizeof(test_data)); // Convert length to network byte order
-
-//     // // Calculate checksum for the data
-//     // p.header.checksum = checksum;
-//     // printf("sender checksum is %u\n", p.header.checksum);
-
-//     // // Send the packet
-//     // int bytes_sent = sendto(sockfd->socket_fd, &p, sizeof(RUDP_Packet), 0, (struct sockaddr *)&(sockfd->dest_addr), sizeof(sockfd->dest_addr));
-//     // if (bytes_sent < 0) {
-//     //     perror("sendto");
-//     //     return -1;
-//     // }
-
-// //     // Create RUDP packet
-// //     RUDP_Packet packet;
-// //     packet.seq_num = sequence_number++; // Assign sequence number
-// //     printf("seq num is %u\n", packet.seq_num);
-// //     memcpy(packet.data, buffer, buffer_size);
-// //     packet.header.length = htons(buffer_size); // Convert length to network byte order
-
-// //     // Calculate checksum for the data
-// //     packet.header.checksum = calculate_checksum(packet.data, packet.header.length);
-// //     printf("sender checksum is %u\n", packet.header.checksum);
-// //     printf("sender len packet is: %u\n", packet.header.length);
-// //     // Send the packet
-// //     int bytes_sent = sendto(sockfd->socket_fd, &packet, buffer_size, 0, (struct sockaddr *)&(sockfd->dest_addr), sizeof(sockfd->dest_addr));
-// //     if (bytes_sent < 0) {
-// //         perror("sendto");
-// //         return -1;
-// //     }
-    
-// //     // // Buffer the sent packet information
-// //     // if (next_buffer_index < MAX_BUFFERED_PACKETS) {
-// //     //     buffered_packets[next_buffer_index].packet = packet; // Store the packet
-// //     //     gettimeofday(&buffered_packets[next_buffer_index].sent_time, NULL); // Record the sent time
-// //     //     buffered_packets[next_buffer_index].ack_received = false; // Initialize acknowledgment flag
-// //     //     next_buffer_index++; // Move to the next available slot in the buffer
-// //     // } else {
-// //     //     fprintf(stderr, "Error: Buffered packet limit reached. Unable to buffer sent packet.\n");
-// //     //     // Handle the error condition appropriately
-// //     // }
-
-
-// //     return bytes_sent;
-// // }
-
-
-
-//     ssize_t total_byte_sent = 0;
-//     ssize_t byte_left = buffer_size;
-//     while(byte_left > 0){
-//         ssize_t packet_size = byte_left > MAX_UDP_PAYLOAD_SIZE ? MAX_UDP_PAYLOAD_SIZE : byte_left;
-//         ssize_t sent_len = sendto(sockfd->socket_fd, buffer, packet_size, 0, (struct sockaddr *)&(sockfd->dest_addr), sizeof(sockfd->dest_addr));
-//         if (sent_len == -1) {
-//             perror("sendto() failed");
-//             return -1;  // Handle the error appropriately
-//         }
-//     }
-
-// }
 
 int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
     if (sockfd == NULL) {
@@ -405,12 +231,12 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
     }
 
     // Calculate the size of each data packet payload
-    int data_in_packet_size = MAX_UDP_PAYLOAD_SIZE - sizeof(uint32_t) - sizeof(RUDPHeader) - 500;
-    printf("data in packet size is: %d\n", data_in_packet_size);
+    // int data_in_packet_size = MAX_UDP_PAYLOAD_SIZE - sizeof(uint32_t) - sizeof(RUDPHeader);
+    int data_in_packet_size = 65400;
+    
 
     // Calculate the number of packets needed
     uint32_t numOfPackets = buffer_size / data_in_packet_size;
-    printf("number of packets: %u\n", numOfPackets);
 
     // Account for remaining data
     int remaining_bytes = buffer_size % data_in_packet_size;
@@ -439,12 +265,15 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
         packet.header.checksum = calculate_checksum(packet.data, data_size);
         packet.header.flags = 0; // Set appropriate flags if needed
 
+        
         // Send the packet
         int bytes_sent = sendto(sockfd->socket_fd, &packet, sizeof(RUDP_Packet), 0, (struct sockaddr *)&(sockfd->dest_addr), sizeof(sockfd->dest_addr));
         if (bytes_sent == -1) {
             perror("sendto() failed");
             return -1;  // Handle the error appropriately
         }
+
+        remaining_bytes = remaining_bytes-data_size;
 
         // Move to the next portion of data in the buffer
         current_position += data_size;

@@ -8,7 +8,7 @@
 #include <netinet/in.h>
 #include "RUDP_API.h"
 
-#define BUFFER_SIZE 2*1024*1024
+#define BUFFER_SIZE 65507
 
 int main(int argc, char **argv) {
     if (argc != 3) {
