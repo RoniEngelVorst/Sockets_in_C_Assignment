@@ -9,6 +9,8 @@
 #include "RUDP_API.h"
 
 #define BUFFER_SIZE 65507
+#define TOTAL_DATA_SIZE 2097152 // 2MB in bytes
+
 
 int main(int argc, char **argv) {
     if (argc != 3) {
@@ -22,14 +24,32 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    // Create a large buffer to accumulate all received data.
+    char *big_buffer = malloc(TOTAL_DATA_SIZE);
+    if (big_buffer == NULL) {
+        perror("Failed to allocate buffer");
+        exit(EXIT_FAILURE);
+    }
+
     struct timeval start_time, end_time;
     double total_time = 0;
     unsigned int total_bytes_received = 0;
+
+
+    // Open a file to save received data
+    FILE *file = fopen("received_data.bin", "wb");
+    if (file == NULL) {
+        perror("Failed to open file");
+        free(big_buffer);
+        exit(EXIT_FAILURE);
+    }
 
     // Create a RUDP socket (server mode)
     RUDP_Socket * server_sock = rudp_socket(true, RECEIVER_PORT);
     if (server_sock == NULL) {
         perror("Socket creation failed");
+        fclose(file);
+        free(big_buffer);
         exit(EXIT_FAILURE);
     }
 
@@ -38,6 +58,7 @@ int main(int argc, char **argv) {
     // Accept incoming connections
     if (!rudp_accept(server_sock)) {
         perror("Accept failed");
+        fclose(file);
         rudp_close(server_sock);
         exit(EXIT_FAILURE);
     }
@@ -48,12 +69,18 @@ int main(int argc, char **argv) {
     while (1) {
         printf("Waiting for packet for Run #%d...\n", run);
 
-        char buffer[BUFFER_SIZE];
-        int bytes_received = rudp_recv(server_sock, buffer, BUFFER_SIZE);
+        // char buffer[BUFFER_SIZE];
+        int bytes_received = rudp_recv(server_sock, big_buffer, TOTAL_DATA_SIZE);
         if (bytes_received < 0) {
             perror("recvfrom");
             rudp_close(server_sock);
             return 1;
+        }
+
+        int written = fwrite(big_buffer, 1, bytes_received, file);
+        if (written < bytes_received) {
+            perror("Failed to write to file");
+            break;
         }
 
         printf("Received packet for Run #%d...\n", run);
@@ -77,6 +104,8 @@ int main(int argc, char **argv) {
         }
     }
 
+    // Close the file and socket when done
+    fclose(file);
     rudp_disconnect(server_sock);
     // Close the socket
     rudp_close(server_sock);

@@ -195,8 +195,20 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
             return -1;
         }
 
-        // Copy data from packet to buffer
+        if (buffer == NULL) {
+            fprintf(stderr, "Buffer pointer is null\n");
+            return -1;
+        }
+
+        // Ensure you do not exceed the buffer size
+        if ((unsigned int)(total_bytes_received + packet.header.length) > buffer_size) {
+            printf("total bytes so far: %d\n", (total_bytes_received + packet.header.length));
+            fprintf(stderr, "Buffer overflow prevented. Cannot copy more data into buffer.\n");
+            return -1;
+        }
+
         memcpy((char *)buffer + total_bytes_received, packet.data, packet.header.length);
+
 
         // Send ACK back to the sender
         RUDPHeader ack_packet;
@@ -246,6 +258,8 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
 
     // Pointer to track the current position in the buffer
     char *current_position = (char *)buffer;
+
+    printf("num of packets: %d\n", numOfPackets);
 
     // Loop through each packet
     for (uint32_t i = 1; i <= numOfPackets; i++) {

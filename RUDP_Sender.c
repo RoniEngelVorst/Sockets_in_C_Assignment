@@ -8,7 +8,7 @@
 #include <netinet/in.h>
 #include "RUDP_API.h"
 
-#define BUFFER_SIZE 2*1024*1024
+// #define BUFFER_SIZE 2*1024*1024
 
 char *util_generate_random_data(unsigned int size) {
     char *buffer = (char *)malloc(size);
