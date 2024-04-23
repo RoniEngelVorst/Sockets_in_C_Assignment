@@ -37,6 +37,12 @@ typedef struct {
     RUDPHeader header; //The header
 } RUDP_Packet;
 
+typedef struct{
+    uint32_t seq_num;   // Sequence number
+    char data[4352];  // Data payload
+    RUDPHeader header; //The header
+} RUDP_LAST_PACKET;
+
 // Define flags for the RUDP protocol
 #define SYN_FLAG    0x01
 #define SYN_ACK_FLAG 0x02
