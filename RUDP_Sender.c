@@ -61,29 +61,6 @@ int main(int argc, char** argv) {
         char *data = util_generate_random_data(file_size);
 
     while (1) {
-        // // Generate random data
-        // unsigned int file_size = 2 * 1024 * 1024; // 2MB
-        // char *data = util_generate_random_data(file_size);
-
-        // // Create RUDP packet
-        // RUDP_Packet packet;
-        // struct RUDPHeader packet_header;
-        // packet.seq_num = sequence_number++; // Assign sequence number
-        // memcpy(packet.data, data, BUFFER_SIZE);
-        // packet.header = packet_header;
-        // packet.header.length = htons(packet.data); // Convert length to network byte order
-
-        // // Calculate checksum for the data
-        // packet.header.checksum = calculate_checksum(&packet.data, BUFFER_SIZE);
-
-        // int header_byte_sent = rudp_send(sock, &packet.header, sizeof(struct RUDPHeader));
-        // if(header_byte_sent < 0){
-        //     perror("Header send failed");
-        //     free(data);
-        //     exit(EXIT_FAILURE);
-        // }
-
-        
         // Send the packet
         int bytes_sent = rudp_send(sock, data, file_size);
         if (bytes_sent < 0) {
@@ -92,18 +69,18 @@ int main(int argc, char** argv) {
             exit(EXIT_FAILURE);
         }
 
-        // Cleanup
-        free(data);
-
         // Prompt user for decision
         char choice;
         printf("Do you want to send the file again? (y/n): ");
         scanf(" %c", &choice);
         if (choice != 'y') {
-            free(data);
+            // free(data);
+            printf("Sender chose to not send the file again.\n");
             break; // Exit the loop
         }
     }
+    // Cleanup
+    free(data);
     rudp_disconnect(sock);
     rudp_close(sock);
 

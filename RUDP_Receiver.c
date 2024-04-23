@@ -66,11 +66,12 @@ int main(int argc, char **argv) {
     printf("Connection accepted. Ready to receive data.\n");
 
     int run = 1;
-    while (1) {
+    int bytes_received = 1;
+    while (bytes_received) {
         printf("Waiting for packet for Run #%d...\n", run);
 
         // char buffer[BUFFER_SIZE];
-        int bytes_received = rudp_recv(server_sock, big_buffer, TOTAL_DATA_SIZE);
+        bytes_received = rudp_recv(server_sock, big_buffer, TOTAL_DATA_SIZE);
         if (bytes_received < 0) {
             perror("recvfrom");
             rudp_close(server_sock);
@@ -84,6 +85,8 @@ int main(int argc, char **argv) {
         }
 
         printf("Received packet for Run #%d...\n", run);
+
+        
 
         // Process received data...
 
@@ -102,13 +105,27 @@ int main(int argc, char **argv) {
             total_bytes_received = 0;
             gettimeofday(&start_time, NULL);
         }
+
+        printf("bytes_received: %d\n", bytes_received);
+        //add an if in order to stop the loop when sender said no
+        
+
+        if (bytes_received == 0){
+            printf("Sender closed the connection.\n");
+            break; // Exit the loop if sender closed the connection
+        }else if (bytes_received < 0){
+            perror("recv");
+            exit(EXIT_FAILURE);
+        }
     }
 
     // Close the file and socket when done
-    fclose(file);
-    rudp_disconnect(server_sock);
-    // Close the socket
-    rudp_close(server_sock);
+        fclose(file);
+        rudp_disconnect(server_sock);
+        // Close the socket
+        rudp_close(server_sock);
+
+    
 
     double average_time = total_time / (run - 1);
     printf("----------------------------------\n");
@@ -117,4 +134,7 @@ int main(int argc, char **argv) {
     printf("----------------------------------\n");
     printf("Receiver end.\n");
     return 0;
+
+
+
 }
