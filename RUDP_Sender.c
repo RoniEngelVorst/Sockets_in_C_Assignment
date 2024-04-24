@@ -75,7 +75,11 @@ int main(int argc, char** argv) {
         scanf(" %c", &choice);
         if (choice != 'y') {
             // free(data);
+            if (rudp_send_end_signal(sock) < 0) {
+                fprintf(stderr, "Failed to send end signal.\n");
+            }
             printf("Sender chose to not send the file again.\n");
+            
             break; // Exit the loop
         }
     }

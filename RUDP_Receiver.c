@@ -35,6 +35,7 @@ int main(int argc, char **argv) {
     double total_time = 0;
     unsigned int total_bytes_received = 0;
 
+    
 
     // Open a file to save received data
     FILE *file = fopen("received_data.bin", "wb");
@@ -65,6 +66,9 @@ int main(int argc, char **argv) {
 
     printf("Connection accepted. Ready to receive data.\n");
 
+    
+
+
     int run = 1;
     int bytes_received = 1;
     while (bytes_received) {
@@ -77,6 +81,10 @@ int main(int argc, char **argv) {
             rudp_close(server_sock);
             return 1;
         }
+        // else if (bytes_received == 0) {  // End signal received
+        //     printf("End of transmission.\n");
+        //     break;
+        // }
 
         int written = fwrite(big_buffer, 1, bytes_received, file);
         if (written < bytes_received) {
@@ -109,6 +117,15 @@ int main(int argc, char **argv) {
         printf("bytes_received: %d\n", bytes_received);
         //add an if in order to stop the loop when sender said no
         
+        if (rudp_recv_end_signal(server_sock) == 1) {
+            printf("Proper termination of the session confirmed.\n");
+            break;
+            // Perform cleanup or state reset here
+        }
+        else {
+            printf("No termination signal received, or there was an error.\n");
+            // Handle error or unexpected behavior
+        }
 
         if (bytes_received == 0){
             printf("Sender closed the connection.\n");

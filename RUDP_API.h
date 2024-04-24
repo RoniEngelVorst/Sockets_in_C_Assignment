@@ -66,6 +66,10 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size);
 // Sends data to the other side
 int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size);
 
+int rudp_send_end_signal(RUDP_Socket *sockfd);
+
+int rudp_recv_end_signal(RUDP_Socket *sockfd);
+
 // Disconnects from an actively connected socket
 int rudp_disconnect(RUDP_Socket *sockfd);
 

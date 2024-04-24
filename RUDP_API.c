@@ -19,6 +19,8 @@
 #define SYN_ACK_FLAG 0x02
 #define ACK_FLAG    0x04
 
+#define END_FLAG 0x08    // Flag indicating end of transmission
+
 #define MAX_UDP_PAYLOAD_SIZE 65507
 
 
@@ -164,6 +166,23 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
 
     struct sockaddr_in sender_addr;
     socklen_t sender_len = sizeof(sender_addr);
+    // RUDPHeader packet;
+    // int bytes_received = recvfrom(sockfd->socket_fd, &packet, sizeof(packet), 0, 
+    //                               (struct sockaddr *)&sender_addr, &sender_len);
+
+    // if (bytes_received < 0) {
+    //     perror("recvfrom failed");
+    //     return -1;
+    // }
+
+    // // Check for end of transmission
+    // if (packet.flags & END_FLAG) {
+    //     printf("End of transmission received.\n");
+    //     return 0;  // Or a specific code indicating end of transmission
+    // }
+
+    // struct sockaddr_in sender_addr;
+    // socklen_t sender_len = sizeof(sender_addr);
     int total_bytes_received = 0;
     unsigned int total_data_bytes_received = 0;
     //check sequance number
@@ -268,11 +287,11 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
         RUDPHeader ack_packet;
         ack_packet.flags = ACK_FLAG;
         sendto(sockfd->socket_fd, &ack_packet, sizeof(ack_packet), 0, (struct sockaddr *)&sender_addr, sender_len);
-        printf("sending an ack. for packet %d\n", expected_seq_number);
+        // printf("sending an ack. for packet %d\n", expected_seq_number);
         
         total_bytes_received = total_bytes_received + bytes_received;
         total_data_bytes_received = total_data_bytes_received + packet.header.length;
-        printf("total data bytes received is %d\n", total_data_bytes_received);
+        // printf("total data bytes received is %d\n", total_data_bytes_received);
         
         expected_seq_number++;
 
@@ -315,7 +334,7 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
     // Pointer to track the current position in the buffer
     char *current_position = (char *)buffer;
 
-    printf("num of packets: %d\n", numOfPackets);
+    // printf("num of packets: %d\n", numOfPackets);
 
     // Loop through each packet
     for (uint32_t i = 1; i <= numOfPackets-1; i++) {
@@ -326,7 +345,7 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
 
         // Calculate data size for this packet
         int data_size = data_in_packet_size;
-        printf("data size for this packet is: %d\n",data_size);
+        // printf("data size for this packet is: %d\n",data_size);
 
 
         // Copy data from buffer to packet
@@ -409,6 +428,58 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
 
     return 0; // Success
 }
+
+int rudp_send_end_signal(RUDP_Socket *sockfd) {
+    if (!sockfd->isConnected) {
+        fprintf(stderr, "Socket not connected.\n");
+        return -1;
+    }
+
+    RUDPHeader end_packet = {0, 0, END_FLAG};  // No data, just an end flag
+    if (sendto(sockfd->socket_fd, &end_packet, sizeof(end_packet), 0, 
+               (struct sockaddr *)&(sockfd->dest_addr), sizeof(sockfd->dest_addr)) < 0) {
+        perror("sendto failed for end signal");
+        return -1;
+    }
+    return 0;
+}
+
+
+int rudp_recv_end_signal(RUDP_Socket *sockfd) {
+    if (!sockfd->isConnected) {
+        fprintf(stderr, "Socket is not connected.\n");
+        return -1;
+    }
+
+    RUDPHeader header;
+    socklen_t addr_len = sizeof(sockfd->dest_addr);
+    ssize_t bytes_received;
+    
+    // Optionally set a timeout if you don't want to block indefinitely
+    struct timeval tv = {5, 0};  // 5 seconds timeout
+    setsockopt(sockfd->socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+
+    // Receive a packet
+    bytes_received = recvfrom(sockfd->socket_fd, &header, sizeof(header), 0,
+                              (struct sockaddr *)&(sockfd->dest_addr), &addr_len);
+    
+    if (bytes_received <= 0) {
+        if (errno == EWOULDBLOCK || errno == EAGAIN) {
+            printf("No end signal received within timeout period.\n");
+            return 0;  // No data received (timeout or non-blocking mode)
+        }
+        perror("recvfrom failed");
+        return -1;
+    }
+
+    if (header.flags & END_FLAG) {
+        printf("End of transmission signal received.\n");
+        return 1;  // End signal received
+    }
+
+    return 0;  // No end signal flag found, normal packet received
+}
+
 
 // Closes the RUDP socket
 int rudp_close(RUDP_Socket *sockfd) {
