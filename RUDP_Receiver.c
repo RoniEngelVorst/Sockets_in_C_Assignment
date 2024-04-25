@@ -68,11 +68,13 @@ int main(int argc, char **argv) {
 
     
 
-
+    int expectingEndSignal = 0;  // Flag to determine if we should check for an end signal
     int run = 1;
     int bytes_received = 1;
     while (bytes_received) {
+        memset(big_buffer, 0, TOTAL_DATA_SIZE); // Clear the buffer at the start of each connection handling loop.
         printf("Waiting for packet for Run #%d...\n", run);
+        gettimeofday(&start_time, NULL);
 
         // char buffer[BUFFER_SIZE];
         bytes_received = rudp_recv(server_sock, big_buffer, TOTAL_DATA_SIZE);
@@ -101,6 +103,7 @@ int main(int argc, char **argv) {
         total_bytes_received += bytes_received;
 
         if (total_bytes_received >= (1 << 21)) {
+            expectingEndSignal = 1;
             gettimeofday(&end_time, NULL);
             double elapsed_time = (end_time.tv_sec - start_time.tv_sec) * 1000.0;
             elapsed_time += (end_time.tv_usec - start_time.tv_usec) / 1000.0;
@@ -111,20 +114,19 @@ int main(int argc, char **argv) {
             run++;
             printf("Waiting for Sender response...\n");
             total_bytes_received = 0;
-            gettimeofday(&start_time, NULL);
+            // gettimeofday(&start_time, NULL);
         }
 
-        printf("bytes_received: %d\n", bytes_received);
+        // printf("bytes_received: %d\n", bytes_received);
         //add an if in order to stop the loop when sender said no
         
-        if (rudp_recv_end_signal(server_sock) == 1) {
+        if (expectingEndSignal && rudp_recv_end_signal(server_sock) == 1) {
             printf("Proper termination of the session confirmed.\n");
             break;
             // Perform cleanup or state reset here
         }
         else {
-            printf("No termination signal received, or there was an error.\n");
-            // Handle error or unexpected behavior
+            printf("Continuing data reception...\n");
         }
 
         if (bytes_received == 0){

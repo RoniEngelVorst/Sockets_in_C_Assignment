@@ -69,10 +69,16 @@ int main(int argc, char** argv) {
             exit(EXIT_FAILURE);
         }
 
+
         // Prompt user for decision
         char choice;
         printf("Do you want to send the file again? (y/n): ");
         scanf(" %c", &choice);
+        printf("sender choice is: %c\n", choice);
+        if (choice != 'y' && choice != 'n') {
+            printf("Invalid input. Please enter 'y' for yes or 'n' for no.\n");
+        }
+
         if (choice != 'y') {
             // free(data);
             if (rudp_send_end_signal(sock) < 0) {

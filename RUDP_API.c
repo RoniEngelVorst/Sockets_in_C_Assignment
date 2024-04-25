@@ -166,27 +166,11 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
 
     struct sockaddr_in sender_addr;
     socklen_t sender_len = sizeof(sender_addr);
-    // RUDPHeader packet;
-    // int bytes_received = recvfrom(sockfd->socket_fd, &packet, sizeof(packet), 0, 
-    //                               (struct sockaddr *)&sender_addr, &sender_len);
-
-    // if (bytes_received < 0) {
-    //     perror("recvfrom failed");
-    //     return -1;
-    // }
-
-    // // Check for end of transmission
-    // if (packet.flags & END_FLAG) {
-    //     printf("End of transmission received.\n");
-    //     return 0;  // Or a specific code indicating end of transmission
-    // }
-
-    // struct sockaddr_in sender_addr;
-    // socklen_t sender_len = sizeof(sender_addr);
     int total_bytes_received = 0;
     unsigned int total_data_bytes_received = 0;
     //check sequance number
     uint32_t expected_seq_number = 1;
+    
 
     while(1){
         if(expected_seq_number == 33){
@@ -236,7 +220,7 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
             total_data_bytes_received = total_data_bytes_received + lpacket.header.length;
             printf("total data bytes received is %d\n", total_data_bytes_received);
             
-            expected_seq_number++;
+            expected_seq_number = 0;
 
             if(total_data_bytes_received == buffer_size){
                 fprintf(stderr, "Received enough bytes\n");
@@ -245,6 +229,7 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
 
 
         }
+        printf("starting to receive packets\n");
         // Receive the packet
         RUDP_Packet packet;
         int bytes_received = recvfrom(sockfd->socket_fd, &packet, sizeof(RUDP_Packet), 0, (struct sockaddr *)&sender_addr, &sender_len);
@@ -252,6 +237,8 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
             perror("recvfrom");
             return -1;
         }
+
+        printf("received a packet\n");
 
         
         if(expected_seq_number != packet.seq_num){
@@ -317,6 +304,7 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
         return -1;
     }
 
+
     // Calculate the size of each data packet payload
     int data_in_packet_size = 65400;
     
@@ -356,14 +344,12 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
         packet.header.checksum = calculate_checksum(packet.data, data_size);
         packet.header.flags = 0; // Set appropriate flags if needed
 
-        
         // Send the packet
         int bytes_sent = sendto(sockfd->socket_fd, &packet, sizeof(RUDP_Packet), 0, (struct sockaddr *)&(sockfd->dest_addr), sizeof(sockfd->dest_addr));
         if (bytes_sent == -1) {
             perror("sendto() failed");
             return -1;  // Handle the error appropriately
         }
-
         remaining_bytes = remaining_bytes-data_size;
 
         // Move to the next portion of data in the buffer
@@ -393,7 +379,7 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
     RUDP_LAST_PACKET last_packet;
     last_packet.seq_num = (uint32_t)numOfPackets;
     memcpy(last_packet.data, current_position, data_size);
-    printf("data size for this packet is: %d\n",data_size);
+    // printf("data size for this packet is: %d\n",data_size);
 
     // Set header fields
     last_packet.header.length = data_size;
@@ -456,12 +442,18 @@ int rudp_recv_end_signal(RUDP_Socket *sockfd) {
     ssize_t bytes_received;
     
     // Optionally set a timeout if you don't want to block indefinitely
-    struct timeval tv = {5, 0};  // 5 seconds timeout
-    setsockopt(sockfd->socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+    struct timeval tv = {30, 0};  // 30 seconds timeout
+    if (setsockopt(sockfd->socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv) != 0) {
+            perror("setsockopt failed to set timeout");
+            return -1;
+    }
+
 
     // Receive a packet
     bytes_received = recvfrom(sockfd->socket_fd, &header, sizeof(header), 0,
                               (struct sockaddr *)&(sockfd->dest_addr), &addr_len);
+
+    printf("byte received: %zd\n", bytes_received);
     
     if (bytes_received <= 0) {
         if (errno == EWOULDBLOCK || errno == EAGAIN) {
