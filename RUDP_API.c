@@ -28,7 +28,7 @@ typedef struct _rudp_socket {
     int socket_fd; // UDP socket file descriptor
     bool isServer; // True if the RUDP socket acts like a server, false for client.
     bool isConnected; // True if there is an active connection, false otherwise.
-    struct sockaddr_in dest_addr; // Destination address. Client fills it when it connects via rudp_connect(), server fills it when it accepts a connection via rudp_accept().
+    struct sockaddr_in dest_addr; // Destination address. 
 } RUDP_Socket;
 
 int sequence_number = 0; // Initial sequence number
@@ -158,6 +158,7 @@ int rudp_accept(RUDP_Socket *sockfd) {
 }
 
 int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
+    //if there is no connection
     if (!sockfd->isConnected) {
         fprintf(stderr, "Invalid operation: Socket is not connected.\n");
         return -1;
@@ -168,11 +169,13 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
     socklen_t sender_len = sizeof(sender_addr);
     int total_bytes_received = 0;
     unsigned int total_data_bytes_received = 0;
+    
     //check sequance number
     uint32_t expected_seq_number = 1;
     
 
     while(1){
+        //check if we are waiting for the last packet that have less data bytes then the others.
         if(expected_seq_number == 33){
             RUDP_LAST_PACKET lpacket;
             int bytes_received = recvfrom(sockfd->socket_fd, &lpacket, sizeof(RUDP_LAST_PACKET), 0, (struct sockaddr *)&sender_addr, &sender_len);
@@ -214,11 +217,9 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
             RUDPHeader ack_packet;
             ack_packet.flags = ACK_FLAG;
             sendto(sockfd->socket_fd, &ack_packet, sizeof(ack_packet), 0, (struct sockaddr *)&sender_addr, sender_len);
-            printf("sending an ack. for packet %d\n", expected_seq_number);
             
             total_bytes_received = total_bytes_received + bytes_received;
             total_data_bytes_received = total_data_bytes_received + lpacket.header.length;
-            printf("total data bytes received is %d\n", total_data_bytes_received);
             
             expected_seq_number = 0;
 
@@ -229,7 +230,8 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
 
 
         }
-        printf("starting to receive packets\n");
+        //for all the packets before the last
+
         // Receive the packet
         RUDP_Packet packet;
         int bytes_received = recvfrom(sockfd->socket_fd, &packet, sizeof(RUDP_Packet), 0, (struct sockaddr *)&sender_addr, &sender_len);
@@ -238,9 +240,8 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
             return -1;
         }
 
-        printf("received a packet\n");
 
-        
+        //if the sequance numbers are different
         if(expected_seq_number != packet.seq_num){
             fprintf(stderr, "Invalid sequence number. Expected: %d, Received: %d\n", expected_seq_number, packet.seq_num);
             return -1;
@@ -274,38 +275,37 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
         RUDPHeader ack_packet;
         ack_packet.flags = ACK_FLAG;
         sendto(sockfd->socket_fd, &ack_packet, sizeof(ack_packet), 0, (struct sockaddr *)&sender_addr, sender_len);
-        // printf("sending an ack. for packet %d\n", expected_seq_number);
         
         total_bytes_received = total_bytes_received + bytes_received;
         total_data_bytes_received = total_data_bytes_received + packet.header.length;
-        // printf("total data bytes received is %d\n", total_data_bytes_received);
         
+        //update the expected sequance number
         expected_seq_number++;
 
+        //enough byte received
         if(total_data_bytes_received == buffer_size){
-            // fprintf(stderr, "Received enough bytes\n");
             break;
         }
     }
-    return total_bytes_received;
 
-    
+    //return how much byte the function received
+    return total_bytes_received;    
 }
 
-
+// Sends data to the other side
 int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
     if (sockfd == NULL) {
         fprintf(stderr, "Invalid RUDP socket\n");
         return -1;
     }
 
+    //checking for connection
     if (!sockfd->isConnected) {
         fprintf(stderr, "Invalid operation: Socket is not connected.\n");
         return -1;
     }
 
-
-    // Calculate the size of each data packet payload
+    //setting the data size of each packet (except the last)
     int data_in_packet_size = 65400;
     
 
@@ -317,12 +317,11 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
     if (remaining_bytes > 0) {
         numOfPackets++;
     }
+    //setting the remaining bytes to be the buffer and we will remove the byte sent each time
     remaining_bytes = buffer_size;
 
     // Pointer to track the current position in the buffer
     char *current_position = (char *)buffer;
-
-    // printf("num of packets: %d\n", numOfPackets);
 
     // Loop through each packet
     for (uint32_t i = 1; i <= numOfPackets-1; i++) {
@@ -333,8 +332,6 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
 
         // Calculate data size for this packet
         int data_size = data_in_packet_size;
-        // printf("data size for this packet is: %d\n",data_size);
-
 
         // Copy data from buffer to packet
         memcpy(packet.data, current_position, data_size);
@@ -375,11 +372,11 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
 
     }
 
+    //sending the last packet
     int data_size = 4352;
     RUDP_LAST_PACKET last_packet;
     last_packet.seq_num = (uint32_t)numOfPackets;
     memcpy(last_packet.data, current_position, data_size);
-    // printf("data size for this packet is: %d\n",data_size);
 
     // Set header fields
     last_packet.header.length = data_size;
@@ -415,6 +412,7 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
     return 0; // Success
 }
 
+//sending an end signal from the sender to the receiver so it won't transffer the file again.
 int rudp_send_end_signal(RUDP_Socket *sockfd) {
     if (!sockfd->isConnected) {
         fprintf(stderr, "Socket not connected.\n");
@@ -431,6 +429,7 @@ int rudp_send_end_signal(RUDP_Socket *sockfd) {
 }
 
 
+//the receiver receive an end signal from the sender
 int rudp_recv_end_signal(RUDP_Socket *sockfd) {
     if (!sockfd->isConnected) {
         fprintf(stderr, "Socket is not connected.\n");
@@ -441,7 +440,7 @@ int rudp_recv_end_signal(RUDP_Socket *sockfd) {
     socklen_t addr_len = sizeof(sockfd->dest_addr);
     ssize_t bytes_received;
     
-    // Optionally set a timeout if you don't want to block indefinitely
+    // set a timeout if you don't want to block indefinitely
     struct timeval tv = {30, 0};  // 30 seconds timeout
     if (setsockopt(sockfd->socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv) != 0) {
             perror("setsockopt failed to set timeout");

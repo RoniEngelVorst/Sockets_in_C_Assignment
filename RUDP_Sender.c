@@ -8,7 +8,6 @@
 #include <netinet/in.h>
 #include "RUDP_API.h"
 
-// #define BUFFER_SIZE 2*1024*1024
 
 char *util_generate_random_data(unsigned int size) {
     char *buffer = (char *)malloc(size);
@@ -61,7 +60,7 @@ int main(int argc, char** argv) {
         char *data = util_generate_random_data(file_size);
 
     while (1) {
-        // Send the packet
+        // Send the data
         int bytes_sent = rudp_send(sock, data, file_size);
         if (bytes_sent < 0) {
             perror("Send failed");

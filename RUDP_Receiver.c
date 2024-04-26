@@ -73,6 +73,7 @@ int main(int argc, char **argv) {
     int bytes_received = 1;
     while (bytes_received) {
         memset(big_buffer, 0, TOTAL_DATA_SIZE); // Clear the buffer at the start of each connection handling loop.
+        
         printf("Waiting for packet for Run #%d...\n", run);
         gettimeofday(&start_time, NULL);
 
@@ -83,10 +84,6 @@ int main(int argc, char **argv) {
             rudp_close(server_sock);
             return 1;
         }
-        // else if (bytes_received == 0) {  // End signal received
-        //     printf("End of transmission.\n");
-        //     break;
-        // }
 
         int written = fwrite(big_buffer, 1, bytes_received, file);
         if (written < bytes_received) {
@@ -117,9 +114,7 @@ int main(int argc, char **argv) {
             // gettimeofday(&start_time, NULL);
         }
 
-        // printf("bytes_received: %d\n", bytes_received);
-        //add an if in order to stop the loop when sender said no
-        
+        //if we get a termination signal we stop transferring
         if (expectingEndSignal && rudp_recv_end_signal(server_sock) == 1) {
             printf("Proper termination of the session confirmed.\n");
             break;
@@ -129,13 +124,13 @@ int main(int argc, char **argv) {
             printf("Continuing data reception...\n");
         }
 
-        if (bytes_received == 0){
-            printf("Sender closed the connection.\n");
-            break; // Exit the loop if sender closed the connection
-        }else if (bytes_received < 0){
-            perror("recv");
-            exit(EXIT_FAILURE);
-        }
+        // if (bytes_received == 0){
+        //     printf("Sender closed the connection.\n");
+        //     break; // Exit the loop if sender closed the connection
+        // }else if (bytes_received < 0){
+        //     perror("recv");
+        //     exit(EXIT_FAILURE);
+        // }
     }
 
     // Close the file and socket when done
@@ -145,7 +140,7 @@ int main(int argc, char **argv) {
         rudp_close(server_sock);
 
     
-
+    //calculate and print statistics
     double average_time = total_time / (run - 1);
     printf("----------------------------------\n");
     printf("Statistics for the entire program:\n");
