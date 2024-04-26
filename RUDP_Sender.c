@@ -60,6 +60,7 @@ int main(int argc, char** argv) {
         char *data = util_generate_random_data(file_size);
 
     while (1) {
+        printf("starting to send again\n");
         // Send the data
         int bytes_sent = rudp_send(sock, data, file_size);
         if (bytes_sent < 0) {
@@ -78,13 +79,12 @@ int main(int argc, char** argv) {
             printf("Invalid input. Please enter 'y' for yes or 'n' for no.\n");
         }
 
-        if (choice != 'y') {
+        if (choice != 'y'){
             // free(data);
             if (rudp_send_end_signal(sock) < 0) {
                 fprintf(stderr, "Failed to send end signal.\n");
             }
-            printf("Sender chose to not send the file again.\n");
-            
+            printf("Sender chose to not send the file again.\n");  
             break; // Exit the loop
         }
     }

@@ -26,6 +26,8 @@
 # clean:
 # 	rm -f *.o *.d TCP_Receiver TCP_Sender
 
+
+#rudp
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c99
 LDFLAGS =

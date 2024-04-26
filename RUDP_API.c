@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <sys/time.h>
+#include <fcntl.h>  // For fcntl()
 #include "RUDP_API.h"
 
 
@@ -53,6 +54,23 @@ RUDP_Socket* rudp_socket(bool isServer, unsigned short int listen_port) {
     sock->isServer = isServer;
     sock->isConnected = false;
 
+    // // set to blocking mode
+    // int flags = fcntl(sockfd, F_GETFL, 0);
+    // if (flags == -1) {
+    //     perror("Failed to get socket flags");
+    //     close(sockfd);
+    //     free(sock);
+    //     exit(EXIT_FAILURE);
+    // }
+
+    // flags &= ~O_NONBLOCK;  // Remove the non-blocking flag if set
+    // if (fcntl(sockfd, F_SETFL, flags) == -1) {
+    //     perror("Failed to set socket to blocking mode");
+    //     close(sockfd);
+    //     free(sock);
+    //     exit(EXIT_FAILURE);
+    // }
+
     // Set SO_REUSEADDR option
     int optval = 1;
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
@@ -72,6 +90,20 @@ RUDP_Socket* rudp_socket(bool isServer, unsigned short int listen_port) {
             perror("Bind failed");
             exit(EXIT_FAILURE);
         }
+    }
+    // Check and print socket mode
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    if (flags == -1) {
+        perror("Failed to get socket flags");
+        close(sockfd);
+        free(sock);
+        exit(EXIT_FAILURE);
+    }
+
+    if (flags & O_NONBLOCK) {
+        printf("Socket is in non-blocking mode!\n");
+    } else {
+        printf("Socket is in blocking mode.\n");
     }
 
     return sock;
@@ -232,13 +264,24 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
         }
         //for all the packets before the last
 
+        //trying to set to blocking mode
+        int flags = fcntl(sockfd->socket_fd, F_GETFL, 0);
+        if (flags & O_NONBLOCK) {
+            // If somehow the socket is still non-blocking, force it to blocking
+            flags &= ~O_NONBLOCK;
+            fcntl(sockfd->socket_fd, F_SETFL, flags);
+        }
+
         // Receive the packet
         RUDP_Packet packet;
+        printf("Waiting for data...\n");
         int bytes_received = recvfrom(sockfd->socket_fd, &packet, sizeof(RUDP_Packet), 0, (struct sockaddr *)&sender_addr, &sender_len);
+        printf("recvfrom returned %d\n", bytes_received);
         if (bytes_received < 0) {
             perror("recvfrom");
             return -1;
         }
+        
 
 
         //if the sequance numbers are different
@@ -341,12 +384,21 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
         packet.header.checksum = calculate_checksum(packet.data, data_size);
         packet.header.flags = 0; // Set appropriate flags if needed
 
+        //trying to set to blocking mode
+        int flags = fcntl(sockfd->socket_fd, F_GETFL, 0);
+        if (flags & O_NONBLOCK) {
+            // If somehow the socket is still non-blocking, force it to blocking
+            flags &= ~O_NONBLOCK;
+            fcntl(sockfd->socket_fd, F_SETFL, flags);
+        }
+
         // Send the packet
         int bytes_sent = sendto(sockfd->socket_fd, &packet, sizeof(RUDP_Packet), 0, (struct sockaddr *)&(sockfd->dest_addr), sizeof(sockfd->dest_addr));
         if (bytes_sent == -1) {
             perror("sendto() failed");
             return -1;  // Handle the error appropriately
         }
+        printf("sent %d bytes\n", bytes_sent);
         remaining_bytes = remaining_bytes-data_size;
 
         // Move to the next portion of data in the buffer
@@ -419,6 +471,7 @@ int rudp_send_end_signal(RUDP_Socket *sockfd) {
         return -1;
     }
 
+
     RUDPHeader end_packet = {0, 0, END_FLAG};  // No data, just an end flag
     if (sendto(sockfd->socket_fd, &end_packet, sizeof(end_packet), 0, 
                (struct sockaddr *)&(sockfd->dest_addr), sizeof(sockfd->dest_addr)) < 0) {
@@ -437,8 +490,9 @@ int rudp_recv_end_signal(RUDP_Socket *sockfd) {
     }
 
     RUDPHeader header;
+    memset(&header, 0, sizeof(header));  // Clear the header structure before reading
     socklen_t addr_len = sizeof(sockfd->dest_addr);
-    ssize_t bytes_received;
+    ssize_t bytes_received = 0;
     
     // set a timeout if you don't want to block indefinitely
     struct timeval tv = {30, 0};  // 30 seconds timeout
@@ -449,10 +503,12 @@ int rudp_recv_end_signal(RUDP_Socket *sockfd) {
 
 
     // Receive a packet
-    bytes_received = recvfrom(sockfd->socket_fd, &header, sizeof(header), 0,
+    bytes_received = recvfrom(sockfd->socket_fd, &header, sizeof(RUDPHeader), 0,
                               (struct sockaddr *)&(sockfd->dest_addr), &addr_len);
 
     printf("byte received: %zd\n", bytes_received);
+    printf("Current header.flags: 0x%X\n", header.flags);
+
     
     if (bytes_received <= 0) {
         if (errno == EWOULDBLOCK || errno == EAGAIN) {
@@ -460,6 +516,11 @@ int rudp_recv_end_signal(RUDP_Socket *sockfd) {
             return 0;  // No data received (timeout or non-blocking mode)
         }
         perror("recvfrom failed");
+        return -1;
+    }
+
+    if (bytes_received != sizeof(header)) {
+        fprintf(stderr, "Incomplete packet received.\n");
         return -1;
     }
 

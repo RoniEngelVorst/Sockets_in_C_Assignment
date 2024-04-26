@@ -34,22 +34,23 @@ int main(int argc, char **argv) {
     struct timeval start_time, end_time;
     double total_time = 0;
     unsigned int total_bytes_received = 0;
+    int total_overall = 0;
 
     
 
-    // Open a file to save received data
-    FILE *file = fopen("received_data.bin", "wb");
-    if (file == NULL) {
-        perror("Failed to open file");
-        free(big_buffer);
-        exit(EXIT_FAILURE);
-    }
+    // // Open a file to save received data
+    // FILE *file = fopen("received_data.bin", "wb");
+    // if (file == NULL) {
+    //     perror("Failed to open file");
+    //     free(big_buffer);
+    //     exit(EXIT_FAILURE);
+    // }
 
     // Create a RUDP socket (server mode)
     RUDP_Socket * server_sock = rudp_socket(true, RECEIVER_PORT);
     if (server_sock == NULL) {
         perror("Socket creation failed");
-        fclose(file);
+        // fclose(file);
         free(big_buffer);
         exit(EXIT_FAILURE);
     }
@@ -59,7 +60,7 @@ int main(int argc, char **argv) {
     // Accept incoming connections
     if (!rudp_accept(server_sock)) {
         perror("Accept failed");
-        fclose(file);
+        // fclose(file);
         rudp_close(server_sock);
         exit(EXIT_FAILURE);
     }
@@ -85,11 +86,11 @@ int main(int argc, char **argv) {
             return 1;
         }
 
-        int written = fwrite(big_buffer, 1, bytes_received, file);
-        if (written < bytes_received) {
-            perror("Failed to write to file");
-            break;
-        }
+        // int written = fwrite(big_buffer, 1, bytes_received, file);
+        // if (written < bytes_received) {
+        //     perror("Failed to write to file");
+        //     break;
+        // }
 
         printf("Received packet for Run #%d...\n", run);
 
@@ -110,6 +111,7 @@ int main(int argc, char **argv) {
             total_time += elapsed_time;
             run++;
             printf("Waiting for Sender response...\n");
+            total_overall += total_bytes_received;
             total_bytes_received = 0;
             // gettimeofday(&start_time, NULL);
         }
@@ -124,17 +126,10 @@ int main(int argc, char **argv) {
             printf("Continuing data reception...\n");
         }
 
-        // if (bytes_received == 0){
-        //     printf("Sender closed the connection.\n");
-        //     break; // Exit the loop if sender closed the connection
-        // }else if (bytes_received < 0){
-        //     perror("recv");
-        //     exit(EXIT_FAILURE);
-        // }
     }
 
     // Close the file and socket when done
-        fclose(file);
+        // fclose(file);
         rudp_disconnect(server_sock);
         // Close the socket
         rudp_close(server_sock);
@@ -142,9 +137,11 @@ int main(int argc, char **argv) {
     
     //calculate and print statistics
     double average_time = total_time / (run - 1);
+    double average_bandwidth = (total_overall / 1024.0 / 1024.0) / (total_time / 1000.0);
     printf("----------------------------------\n");
     printf("Statistics for the entire program:\n");
     printf("- Average time: %.2fms\n", average_time);
+    printf("- Average bandwidth: %.2fMB/s\n", average_bandwidth);
     printf("----------------------------------\n");
     printf("Receiver end.\n");
     return 0;
