@@ -9,6 +9,8 @@
 #include <errno.h>
 #include <sys/time.h>
 #include <fcntl.h>  // For fcntl()
+#include <sys/select.h> // Include necessary header for select()
+
 #include "RUDP_API.h"
 
 
@@ -54,22 +56,6 @@ RUDP_Socket* rudp_socket(bool isServer, unsigned short int listen_port) {
     sock->isServer = isServer;
     sock->isConnected = false;
 
-    // // set to blocking mode
-    // int flags = fcntl(sockfd, F_GETFL, 0);
-    // if (flags == -1) {
-    //     perror("Failed to get socket flags");
-    //     close(sockfd);
-    //     free(sock);
-    //     exit(EXIT_FAILURE);
-    // }
-
-    // flags &= ~O_NONBLOCK;  // Remove the non-blocking flag if set
-    // if (fcntl(sockfd, F_SETFL, flags) == -1) {
-    //     perror("Failed to set socket to blocking mode");
-    //     close(sockfd);
-    //     free(sock);
-    //     exit(EXIT_FAILURE);
-    // }
 
     // Set SO_REUSEADDR option
     int optval = 1;
@@ -100,11 +86,7 @@ RUDP_Socket* rudp_socket(bool isServer, unsigned short int listen_port) {
         exit(EXIT_FAILURE);
     }
 
-    if (flags & O_NONBLOCK) {
-        printf("Socket is in non-blocking mode!\n");
-    } else {
-        printf("Socket is in blocking mode.\n");
-    }
+    
 
     return sock;
 }
@@ -274,9 +256,7 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
 
         // Receive the packet
         RUDP_Packet packet;
-        printf("Waiting for data...\n");
         int bytes_received = recvfrom(sockfd->socket_fd, &packet, sizeof(RUDP_Packet), 0, (struct sockaddr *)&sender_addr, &sender_len);
-        printf("recvfrom returned %d\n", bytes_received);
         if (bytes_received < 0) {
             perror("recvfrom");
             return -1;
@@ -365,6 +345,7 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
 
     // Pointer to track the current position in the buffer
     char *current_position = (char *)buffer;
+    
 
     // Loop through each packet
     for (uint32_t i = 1; i <= numOfPackets-1; i++) {
@@ -398,16 +379,17 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
             perror("sendto() failed");
             return -1;  // Handle the error appropriately
         }
-        printf("sent %d bytes\n", bytes_sent);
         remaining_bytes = remaining_bytes-data_size;
 
         // Move to the next portion of data in the buffer
         current_position += data_size;
 
+
         // Receive ACK for this packet
         RUDPHeader ack_packet;
         int ack_bytes_received = recv(sockfd->socket_fd, &ack_packet, sizeof(RUDPHeader), 0);
         if (ack_bytes_received == -1) {
+            printf("failed to receive an ack.\n");
             perror("recv() failed");
             return -1;  // Handle the error appropriately
         }
@@ -442,6 +424,7 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
         return -1;  // Handle the error appropriately
     }
 
+    
     // Receive ACK for this packet
     RUDPHeader ack_packet;
     int ack_bytes_received = recv(sockfd->socket_fd, &ack_packet, sizeof(RUDPHeader), 0);
@@ -506,8 +489,7 @@ int rudp_recv_end_signal(RUDP_Socket *sockfd) {
     bytes_received = recvfrom(sockfd->socket_fd, &header, sizeof(RUDPHeader), 0,
                               (struct sockaddr *)&(sockfd->dest_addr), &addr_len);
 
-    printf("byte received: %zd\n", bytes_received);
-    printf("Current header.flags: 0x%X\n", header.flags);
+    
 
     
     if (bytes_received <= 0) {
